@@ -1,0 +1,46 @@
+/* Hamsoo options page: reuses popup.css components in a centered, full-tab
+   column instead of the fixed 372px popup shell. */
+
+/* Sync status indicator in the footer */
+.sync-row {
+  text-align: center;
+  margin-top: 6px;
+}
+.sync-status {
+  font-size: 11px;
+  opacity: 0.65;
+  letter-spacing: 0.01em;
+}
+.sync-status.active { color: var(--accent-text, var(--accent)); opacity: 0.8; }
+.sync-status.unavailable { opacity: 0.4; }
+
+
+body {
+  width: auto;
+  min-height: 100vh;
+}
+
+.shell {
+  max-height: none;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 16px 32px;
+}
+
+.content {
+  max-height: none;
+  overflow-y: visible;
+}
+
+.header {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+/* The global-disable dimming is a popup affordance; the options page must
+   stay fully usable even while Hamsoo is switched off. */
+body.disabled-global .content > .card {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  filter: none !important;
+}

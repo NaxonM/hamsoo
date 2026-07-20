@@ -1,0 +1,13 @@
+{
+  "name": "Hamsoo",
+  "version": "1.1.0",
+  "tag": "v1.1.0",
+  "date": "2026-07-21",
+  "license": "AGPL-3.0-or-later",
+  "repository": "https://github.com/NaxonM/hamsoo",
+  "homepage": "https://naxonm.github.io/hamsoo",
+  "downloads": {
+    "chromium": "https://github.com/NaxonM/hamsoo/releases/download/v1.1.0/hamsoo-chromium.zip",
+    "firefox": "https://github.com/NaxonM/hamsoo/releases/download/v1.1.0/hamsoo-firefox.zip"
+  }
+}
