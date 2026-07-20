@@ -1,0 +1,35 @@
+# Node dependencies
+node_modules/
+
+# Build output & packages
+dist/
+*.zip
+
+# Logs & temporary files
+*.log
+npm-debug.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE & Editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Internal release instructions & store listings
+RELEASE-*.md
+STORE-LISTING.md
+
+# Scratch images & scripts
+with-hamsoo.jpg
+without-hamsoo.jpg
+*-labeled.jpg
+hamsoo-comparison-split.jpg
+image*.png
+process_images.py
+
+

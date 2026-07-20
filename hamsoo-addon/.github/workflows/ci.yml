@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Static checks (syntax, JSON, i18n parity)
+        run: npm run check
+
+      - name: Build Chromium + Firefox variants
+        run: npm run build
+
+      - name: Tests (includes headless-Chrome DOM suite)
+        run: npm test
+        env:
+          # ubuntu-latest runners ship Google Chrome; the DOM tests
+          # auto-detect it, this just makes the choice explicit.
+          HAMSOO_CHROME: google-chrome
+
+      - name: Package store zips
+        run: npm run zip
+
+      - name: Upload store zips
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-zips
+          path: dist/*.zip
+          if-no-files-found: error

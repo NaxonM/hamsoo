@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.zip
+.DS_Store
+
+# Internal docs
+RELEASE-*.md
+STORE-LISTING.md
+
+
+# UI preview screenshots (npm run preview)
+preview-shots/

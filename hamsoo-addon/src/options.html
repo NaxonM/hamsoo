@@ -1,0 +1,129 @@
+<!doctype html>
+<html dir="rtl" lang="fa" data-accent="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>هم‌سو</title>
+  <script src="lang-init.js"></script>
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <div class="brand">
+        <img src="icons/icon-48.png" width="34" height="34" alt="">
+        <div class="brand-copy">
+          <div class="title-row">
+            <h1 data-i18n="settingsTitle">تنظیمات</h1>
+            <span class="version">۱٫۰</span>
+          </div>
+          <p class="subtitle" data-i18n="settingsSubtitle">تنظیمات پیشرفته و مدیریت فهرست‌ها</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="content" id="content">
+      <section class="card" id="appearanceCard">
+        <div class="card-head">
+          <h2 data-i18n="appearanceTitle">ظاهر</h2>
+        </div>
+        <div class="card-body appearance">
+          <div class="seg" id="modeSeg" role="radiogroup" aria-label="حالت نمایش">
+            <button type="button" role="radio" data-mode="system" data-i18n="modeSystem">سیستم</button>
+            <button type="button" role="radio" data-mode="light" data-i18n="modeLight">روشن</button>
+            <button type="button" role="radio" data-mode="dark" data-i18n="modeDark">تیره</button>
+          </div>
+          <div class="accents" id="accentRow" role="radiogroup" aria-label="رنگ زمینه">
+            <button type="button" role="radio" class="accent accent-blue" data-accent="blue" data-i18n-attr="title:accentBlue;aria-label:accentBlue" title="آبی" aria-label="آبی"></button>
+            <button type="button" role="radio" class="accent accent-teal" data-accent="teal" data-i18n-attr="title:accentTeal;aria-label:accentTeal" title="سبزآبی" aria-label="سبزآبی"></button>
+            <button type="button" role="radio" class="accent accent-violet" data-accent="violet" data-i18n-attr="title:accentViolet;aria-label:accentViolet" title="بنفش" aria-label="بنفش"></button>
+            <button type="button" role="radio" class="accent accent-amber" data-accent="amber" data-i18n-attr="title:accentAmber;aria-label:accentAmber" title="کهربایی" aria-label="کهربایی"></button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="languageCard">
+        <div class="card-head">
+          <h2 data-i18n="langTitle">زبان</h2>
+        </div>
+        <div class="seg" id="langSeg" role="radiogroup" aria-label="زبان رابط">
+          <button type="button" role="radio" data-lang="auto" data-i18n="langAuto">خودکار</button>
+          <button type="button" role="radio" data-lang="fa" data-i18n="langFa">فارسی</button>
+          <button type="button" role="radio" data-lang="en" data-i18n="langEn">English</button>
+          <button type="button" role="radio" data-lang="ar" data-i18n="langAr">عربی</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2 data-i18n="shortcutTitle">کلید میان‌بر</h2>
+        </div>
+        <div class="shortcut-box">
+          <button type="button" class="shortcut-badge" id="shortcutDisplay" data-i18n-attr="title:changeShortcut;aria-label:changeShortcut" title="تغییر میان‌بر" aria-label="تغییر میان‌بر">Alt+Shift+R</button>
+          <div class="shortcut-actions">
+            <button class="btn btn-sm" id="changeShortcutBtn" type="button" data-i18n="changeShortcut">تغییر میان‌بر</button>
+            <button class="btn btn-sm ghost" id="resetShortcutBtn" type="button" data-i18n="resetShortcut">بازنشانی</button>
+          </div>
+        </div>
+        <p class="scope-hint" id="shortcutHint" data-i18n="shortcutHint">برای تغییر، روی دکمه کلیک کنید و کلید ترکیبی جدید را روی کیبورد فشار دهید.</p>
+        <button class="link-btn" id="openBrowserShortcutsBtn" type="button" style="margin-top:8px" data-i18n="openBrowserShortcuts">مدیریت میان‌بر در تنظیمات مرورگر ←</button>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2 data-i18n="customSitesTitle">سایت‌های شخصی</h2>
+        </div>
+        <div class="custom-sites" id="customSites" hidden>
+          <div class="custom-site-list" id="customSiteList"></div>
+        </div>
+        <p class="scope-hint" id="customSitesEmpty" data-i18n="customSitesEmpty">هنوز سایتی اضافه نشده است. در پنجره افزونه از دکمه «افزودن سایت» استفاده کنید.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2 data-i18n="pickedTitle">عناصر انتخابی</h2>
+        </div>
+        <div class="custom-sites" id="pickedElements" hidden>
+          <div class="custom-site-list" id="pickedList"></div>
+        </div>
+        <p class="scope-hint" id="pickedEmpty" data-i18n="pickedEmpty">هنوز عنصری انتخاب نشده است. در صفحه موردنظر راست‌کلیک کنید و «انتخاب عنصر برای راست‌چین‌سازی همیشگی» را بزنید.</p>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2 data-i18n="fontTitle">فونت</h2>
+        </div>
+        <button class="link-btn" id="manageFonts" type="button" data-i18n="manageFonts">مدیریت فونت‌های شخصی ←</button>
+      </section>
+
+      <section class="card" id="backupCard">
+        <div class="card-head">
+          <h2 data-i18n="backupTitle">پشتیبان‌گیری</h2>
+        </div>
+        <div class="backup-row">
+          <button class="btn" id="exportBtn" type="button" data-i18n="exportBtn">برون‌بری تنظیمات</button>
+          <button class="btn" id="importBtn" type="button" data-i18n="importBtn">درون‌ریزی تنظیمات</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </section>
+    </main>
+
+    <footer class="preview">
+      <div class="footer-meta">
+        <a class="made-with" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener noreferrer" data-i18n="madeWith">ساخته‌شده با ❤️ توسط NaxonM</a>
+        <span class="save-state" id="saveState" aria-live="polite"></span>
+      </div>
+      <div class="sync-row">
+        <span id="syncStatus" class="sync-status" aria-live="polite"></span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="fontdb.js"></script>
+  <script src="i18n.js"></script>
+  <script src="shared/settings-util.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

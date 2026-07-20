@@ -1,0 +1,89 @@
+/* Hamsoo — attribute-driven RTL styles. No inline styles are written to page elements;
+   the content script only toggles data attributes, and these rules do the styling.
+   Removing [data-hamsoo-on] from <html> instantly deactivates everything. */
+
+html[data-hamsoo-on] [data-hamsoo="rtl"] {
+  direction: rtl !important;
+  /* 'start' = right for rtl, left for ltr — never forces English text rightward. */
+  text-align: start !important;
+  /* 'isolate' preserves the element's RTL base direction and isolates it from
+     surrounding bidi contexts. This prevents LTR-starting lines (e.g. English titles
+     in bullet points like "Scaramouche (اسکاراموش): ...") from being incorrectly
+     flipped to LTR. */
+  unicode-bidi: isolate !important;
+}
+
+html[data-hamsoo-on] [data-hamsoo="ltr"] {
+  direction: ltr !important;
+  text-align: start !important;
+  /* Only applied to elements verified to contain zero RTL characters, so strict
+     LTR override is safe and fixes leading/trailing punctuation jumps. */
+  unicode-bidi: isolate-override !important;
+}
+
+/* Container promotion: tables and lists whose items are all RTL get their
+   column order / bullet side flipped as a whole. */
+html[data-hamsoo-on] [data-hamsoo-box="rtl"] {
+  direction: rtl !important;
+}
+
+/* Typography is variable-driven: changing the font or sliders updates three
+   CSS custom properties on <html> instead of touching every element again. */
+html[data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] {
+  font-family: var(--hamsoo-font, inherit) !important;
+}
+
+html[data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] {
+  font-size: var(--hamsoo-size, 15px) !important;
+  line-height: var(--hamsoo-lh, 1.9) !important;
+}
+
+/* Optional weight / letter-spacing. Gated behind their own attributes, which the
+   content script only adds when the user moves these sliders off the defaults,
+   so headings and bold text keep their own weight the rest of the time. */
+html[data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] {
+  font-weight: var(--hamsoo-weight, 400) !important;
+  /* Allow synthetic (faux) bold when the active font is single-weight, and stop
+     a site's `font-synthesis: none` from suppressing it. */
+  font-synthesis: weight style !important;
+}
+html[data-hamsoo-on][data-hamsoo-ls] [data-hamsoo="rtl"] {
+  letter-spacing: var(--hamsoo-ls, 0) !important;
+}
+
+/* Code inside RTL prose blocks keeps its own LTR run. */
+html[data-hamsoo-on] [data-hamsoo="rtl"] pre,
+html[data-hamsoo-on] [data-hamsoo="rtl"] code[data-hamsoo="ltr"] {
+  unicode-bidi: isolate;
+}
+
+/* Site-scoped deep typography. Some apps (NotebookLM) set their own
+   font-family/size directly on the inner text nodes, which blocks inheritance
+   from the marked wrapper. For those hosts only, push typography onto the
+   descendants too, while leaving code/pre (and sub/sup sizing) alone. Scoping
+   by host keeps other sites' heading, math and code styling untouched. */
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *) {
+  font-family: var(--hamsoo-font, inherit) !important;
+}
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup) {
+  font-size: var(--hamsoo-size, 15px) !important;
+  line-height: var(--hamsoo-lh, 1.9) !important;
+}
+/* Weight also has to reach the inner text nodes on NotebookLM; exclude b/strong
+   so real emphasis is preserved. */
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong) {
+  font-weight: var(--hamsoo-weight, 400) !important;
+  font-synthesis: weight style !important;
+}
+
+/* Phase 9: opt-in text alignment (justify) for Persian prose. Higher
+   specificity than the base 'start' rule so it wins when chosen. */
+html[data-hamsoo-on][data-hamsoo-justify] [data-hamsoo="rtl"] {
+  text-align: justify !important;
+}
+
+/* Phase 9: reading width (measure). Caps line length on prose blocks for
+   easier reading; table cells are excluded so tables keep their layout. */
+html[data-hamsoo-on][data-hamsoo-measure] [data-hamsoo="rtl"]:not(td):not(th) {
+  max-width: var(--hamsoo-measure, 70ch) !important;
+}

@@ -1,0 +1,44 @@
+<!doctype html>
+<html dir="rtl" lang="fa" data-accent="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="optTitle">فونت‌های شخصی — هم‌سو</title>
+  <script src="lang-init.js"></script>
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="fonts.css">
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <img src="icons/icon-48.png" width="40" height="40" alt="">
+      <div>
+        <h1 data-i18n="optTitle">فونت‌های شخصی</h1>
+        <p data-i18n="optDesc">فایل فونت دلخواه خود (TTF&rlm;، OTF&rlm;، WOFF&rlm; یا WOFF2&rlm;) را اضافه کنید و سپس از پنجره هم‌سو انتخابش کنید.</p>
+      </div>
+    </header>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".ttf,.otf,.woff,.woff2" multiple>
+      <strong data-i18n="dropTitle">افزودن فونت</strong>
+      <span data-i18n="dropHint">فایل را اینجا رها کنید یا برای انتخاب کلیک کنید (حداکثر ۴ مگابایت، ۱۲ فونت)</span>
+    </label>
+
+    <div class="sample-row" id="sampleRow" hidden>
+      <input type="text" id="sampleInput" dir="auto" data-i18n-attr="placeholder:samplePlaceholder" placeholder="متن نمونهٔ دلخواه خود را بنویسید…">
+    </div>
+
+    <section class="font-list" id="fontList" aria-live="polite"></section>
+
+    <p class="status" id="status" aria-live="polite"></p>
+
+    <footer class="page-footer">
+      <a class="made-with" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener noreferrer" data-i18n="madeWith">ساخته‌شده با ❤️ توسط NaxonM</a>
+    </footer>
+  </div>
+
+  <script src="fontdb.js"></script>
+  <script src="i18n.js"></script>
+  <script src="fonts.js"></script>
+</body>
+</html>

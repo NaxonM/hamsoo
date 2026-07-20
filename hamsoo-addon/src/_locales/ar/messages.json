@@ -1,0 +1,29 @@
+{
+  "extName": {
+    "message": "Hamsoo — تنسيق RTL للذكاء الاصطناعي"
+  },
+  "extDesc": {
+    "message": "تنسيق RTL ذكي للنص العربي والفارسي في 12 من مواقع الدردشة بالذكاء الاصطناعي — مع خطوط مخصّصة، ضبط قابلية القراءة، وإمكانية إضافة أي موقع آخر"
+  },
+  "cmdToggle": {
+    "message": "تفعيل أو تعطيل Hamsoo"
+  },
+  "actionTitle": {
+    "message": "إعدادات Hamsoo"
+  },
+  "menuFixSelection": {
+    "message": "إصلاح اتجاه النص المحدد (Hamsoo)"
+  },
+  "menuPickElement": {
+    "message": "إصلاح عنصر بشكل دائم في هذا الموقع… (Hamsoo)"
+  },
+  "pickerHint": {
+    "message": "انقر على العنصر الذي يجب أن يصلحه Hamsoo دائمًا — اضغط Esc للإلغاء"
+  },
+  "pickerSaved": {
+    "message": "تم الحفظ — سيصلح Hamsoo هذا العنصر في هذا الموقع من الآن فصاعدًا"
+  },
+  "pickerFailed": {
+    "message": "تعذر حفظ العنصر المحدد"
+  }
+}
