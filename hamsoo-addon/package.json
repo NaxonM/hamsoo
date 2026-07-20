@@ -1,0 +1,25 @@
+{
+  "name": "hamsoo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hamsoo - RTL/Persian typography helper for AI chat sites. Single-source build for Chromium and Firefox.",
+  "author": "NaxonM",
+  "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NaxonM/hamsoo.git"
+  },
+  "homepage": "https://github.com/NaxonM/hamsoo",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node scripts/check.js",
+    "lint": "node scripts/check.js",
+    "build": "node build.js",
+    "test": "node test/run.js",
+    "verify": "node scripts/check.js && node build.js && node test/run.js",
+    "zip": "node build.js && cd dist && rm -f hamsoo-chromium.zip hamsoo-firefox.zip && zip -rq hamsoo-chromium.zip hamsoo-chromium && zip -rq hamsoo-firefox.zip hamsoo-firefox",
+    "bump": "node scripts/bump-version.js"
+  }
+}

@@ -1,0 +1,601 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>هم‌سو — تجربهٔ خوانایی بی‌نقص و فونت فارسی در هوش مصنوعی</title>
+<meta name="description" content="هم‌سو: افزونهٔ رایگان و متن‌باز مرورگر برای راست‌چین‌سازی هوشمند و اصلاح فونت فارسی در ChatGPT، Gemini، NotebookLM و سرویس‌های دیگر.">
+
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="48x48" href="icons/icon-48.png">
+<link rel="apple-touch-icon" sizes="128x128" href="icons/icon-128.png">
+
+<meta property="og:title" content="هم‌سو — تجربهٔ خوانایی بی‌نقص و فونت فارسی در هوش مصنوعی">
+<meta property="og:description" content="راست‌چین‌سازی هوشمند، فونت‌های زیبای فارسی و تنظیمات خوانایی در ابزارهای هوش مصنوعی.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Estedad:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/sahel-font@v3.4.0/dist/font-face.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/shabnam-font@v5.0.1/dist/font-face.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/samim-font@v4.0.5/dist/font-face.css">
+
+<style>
+@font-face{font-family:'Gandom';src:url('https://raw.githubusercontent.com/rastikerdar/gandom-font/master/dist/Gandom.woff2') format('woff2');font-display:swap}
+
+:root{
+  --bg:#0a0c11; --card:rgba(255,255,255,.04); --card2:rgba(255,255,255,.028); --brd:rgba(255,255,255,.09);
+  --text:#eaecf3; --muted:#9aa3b4; --accent:#7c5cff; --accent2:#22d3ee; --accent3:#34d399; --warn:#ff8a80;
+  --radius:18px; --maxw:1080px; --nav:60px;
+  --card-grad:linear-gradient(158deg,rgba(255,255,255,.065),rgba(255,255,255,.018));
+  --card2-grad:linear-gradient(158deg,rgba(255,255,255,.045),rgba(255,255,255,.012));
+  --font-en:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --font-fa:'Vazirmatn',var(--font-en);
+}
+[data-theme='light']{
+  --bg:#f6f7fb; --card:#ffffff; --card2:#f4f5f9; --brd:rgba(12,16,26,.10);
+  --text:#131722; --muted:#5a6273; --warn:#c0392b;
+  --card-grad:linear-gradient(158deg,#ffffff,#eef1f8);
+  --card2-grad:linear-gradient(158deg,#f9fafc,#eef1f7);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;color:var(--text);line-height:1.7;font-family:var(--font-fa);
+  background:
+    radial-gradient(1100px 600px at 84% -14%,rgba(124,92,255,.20),transparent 58%),
+    radial-gradient(880px 540px at 4% 6%,rgba(34,211,238,.10),transparent 55%),
+    radial-gradient(1000px 720px at 50% 120%,rgba(52,211,153,.075),transparent 60%),
+    var(--bg);
+  background-attachment:fixed;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overflow-x:hidden}
+html[lang='en'] body{font-family:var(--font-en)}
+a{color:inherit;text-decoration:none}
+img{max-width:100%}
+.wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 26px}
+h1,h2,h3{line-height:1.15;margin:0}
+h2{font-size:clamp(1.7rem,3.4vw,2.5rem);font-weight:800;letter-spacing:-.01em}
+.eyebrow{color:var(--accent2);font-weight:700;letter-spacing:.08em;font-size:.76rem;text-transform:uppercase;margin:0 0 14px}
+.sub{color:var(--muted);font-size:1.05rem;max-width:620px;margin:16px auto 0}
+.btn{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--brd);
+  background:var(--card-grad);color:var(--text);padding:12px 22px;border-radius:999px;
+  font:inherit;font-weight:600;cursor:pointer;transition:.18s;white-space:nowrap}
+.btn:hover{transform:translateY(-2px);border-color:transparent}
+.btn.primary{background:linear-gradient(120deg,var(--accent),#5b8bff);color:#fff;border-color:transparent;
+  box-shadow:0 12px 34px -12px rgba(124,92,255,.7)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent}
+.cta{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+
+/* nav (minimal) */
+.nav{position:fixed;inset-inline:0;top:0;z-index:60;height:var(--nav);backdrop-filter:blur(14px);
+  background:color-mix(in srgb,var(--bg) 70%,transparent);border-bottom:1px solid var(--brd)}
+.nav .wrap{display:flex;align-items:center;gap:14px;height:100%;direction:ltr}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.2rem}
+.brand img{display:block;border-radius:9px}
+.nav .tools{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.icobtn{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;border:1px solid var(--brd);
+  background:var(--card-grad);cursor:pointer;color:var(--text);font:inherit;font-weight:700;font-size:.88rem;transition:.15s;text-decoration:none}
+.icobtn:hover{transform:translateY(-2px);background:var(--brd)}
+.nav .tools .btn{height:38px;padding:0 18px;font-size:.92rem;box-shadow:0 8px 22px -14px rgba(124,92,255,.6)}
+
+/* slide deck */
+.slide{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;min-height:100vh;padding:calc(var(--nav) + 30px) 22px 44px}
+.slide-inner{width:100%;max-width:var(--maxw);opacity:0;transform:translateY(38px) scale(.985);
+  transition:opacity .75s cubic-bezier(.22,.61,.36,1),transform .75s cubic-bezier(.22,.61,.36,1)}
+.slide.in-view .slide-inner{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.slide-inner{transition:none;opacity:1;transform:none}}
+
+/* dot nav */
+.dots{position:fixed;z-index:60;left:20px;right:auto;top:50%;transform:translateY(-50%);display:none;flex-direction:column;gap:14px}
+.dots button{width:11px;height:11px;border-radius:50%;border:0;padding:0;cursor:pointer;position:relative;
+  background:color-mix(in srgb,var(--text) 26%,transparent);transition:.2s}
+.dots button:hover{background:color-mix(in srgb,var(--text) 55%,transparent)}
+.dots button.active{background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+.dots button span{position:absolute;left:22px;right:auto;top:50%;transform:translateY(-50%);white-space:nowrap;
+  font-size:.78rem;font-weight:600;color:var(--text);background:var(--card-grad);border:1px solid var(--brd);
+  padding:4px 10px;border-radius:8px;opacity:0;pointer-events:none;transition:.18s}
+.dots button:hover span{opacity:1}
+.scroll-cue{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);color:var(--muted);font-size:1.4rem;animation:bob 1.8s infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,7px)}}
+
+/* hero */
+.badge{display:inline-flex;align-items:center;gap:8px;padding:7px 15px;border-radius:999px;
+  border:1px solid var(--brd);background:var(--card-grad);color:var(--muted);font-size:.85rem;font-weight:600;margin-bottom:22px}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--accent3);box-shadow:0 0 0 4px rgba(52,211,153,.18)}
+.hero h1{font-size:clamp(2.2rem,5.2vw,3.6rem);font-weight:800;letter-spacing:-.02em;max-width:860px;margin:0 auto;
+  background:linear-gradient(120deg,var(--text),color-mix(in srgb,var(--accent) 60%,var(--text)));
+  -webkit-background-clip:text;background-clip:text}
+.hero p.lead{color:var(--muted);font-size:1.15rem;margin:22px auto 30px;max-width:600px}
+.trust{margin-top:22px;color:var(--muted);font-size:.9rem;font-weight:600}
+
+/* playground */
+.play-head h2{margin-bottom:8px}
+.play-hint{display:inline-flex;align-items:center;gap:8px;margin:14px auto 0;padding:7px 15px;border-radius:999px;
+  border:1px dashed color-mix(in srgb,var(--accent) 50%,var(--brd));background:color-mix(in srgb,var(--accent) 9%,transparent);
+  color:var(--text);font-weight:600;font-size:.88rem}
+.play-hint .pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(124,92,255,.5)}70%{box-shadow:0 0 0 8px rgba(124,92,255,0)}100%{box-shadow:0 0 0 0 rgba(124,92,255,0)}}
+
+.play-grid{display:grid;grid-template-columns:1.55fr .9fr;gap:20px;align-items:stretch;margin-top:22px;
+  height:clamp(468px,64vh,620px);text-align:start;direction:ltr}
+/* Keep the chat window on the left and the Hamsoo frame on the right in both
+   languages; only restore each column's text direction per language. */
+html[dir='rtl'] .play-grid>*{direction:rtl}
+
+.chatwin{border:1px solid var(--brd);border-radius:var(--radius);overflow:hidden;background:var(--card-grad);
+  box-shadow:0 30px 70px -40px rgba(0,0,0,.6);display:flex;flex-direction:column;height:100%;min-height:0}
+.chatwin .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;flex:0 0 auto;
+  border-bottom:1px solid var(--brd);background:color-mix(in srgb,var(--card) 55%,transparent)}
+.chatwin .bar-left{display:flex;align-items:center;gap:7px;min-width:0}
+.chatwin .bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57;display:inline-block}
+.chatwin .bar i:nth-child(2){background:#febc2e}.chatwin .bar i:nth-child(3){background:#28c840}
+.chatwin .bar .domain{margin-inline-start:10px;color:var(--muted);font-size:.82rem;display:inline-flex;align-items:center;gap:6px}
+.state-pill{font-size:.72rem;font-weight:800;letter-spacing:.02em;padding:4px 10px;border-radius:999px;text-transform:uppercase;
+  border:1px solid var(--warn);color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent);transition:.2s;white-space:nowrap}
+.chatwin.on .state-pill{border-color:var(--accent3);color:var(--accent3);background:color-mix(in srgb,var(--accent3) 14%,transparent)}
+.chat{padding:18px;display:flex;flex-direction:column;gap:13px;overflow-y:auto;flex:1 1 auto;min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--accent) 50%,transparent) transparent}
+.chat::-webkit-scrollbar{width:7px}
+.chat::-webkit-scrollbar-track{background:transparent;margin:8px 0}
+.chat::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--accent) 42%,transparent);border-radius:999px}
+.chat::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--accent) 65%,transparent)}
+.msg{display:flex;gap:10px;max-width:100%;align-items:flex-start}
+.msg .avatar{width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;font-size:.95rem;
+  background:linear-gradient(135deg,rgba(124,92,255,.3),rgba(34,211,238,.22));border:1px solid var(--brd)}
+.msg.user{flex-direction:row-reverse}
+.msg.user .avatar{background:linear-gradient(135deg,rgba(52,211,153,.28),rgba(34,211,238,.2))}
+.bubble{border:1px solid var(--brd);border-radius:14px;padding:11px 14px;max-width:84%;background:var(--card2);
+  font-family:Tahoma,'Segoe UI',sans-serif;direction:ltr;text-align:left;line-height:1.5;font-size:14.5px;font-weight:400;letter-spacing:0;
+  transition:font-size .25s ease,line-height .25s ease,letter-spacing .25s ease}
+.msg.user .bubble{background:color-mix(in srgb,var(--accent) 16%,var(--card2));border-color:color-mix(in srgb,var(--accent) 30%,var(--brd))}
+.chat.hamsoo-on .bubble{font-family:var(--demo-font,'Vazirmatn'),'Vazirmatn',Tahoma,sans-serif;
+  direction:rtl;text-align:var(--demo-align,right);line-height:var(--demo-lh,1.9);
+  font-size:calc(var(--demo-size,16) * 1px);letter-spacing:calc(var(--demo-ls,0) * 1px);
+  font-weight:var(--demo-weight,500);unicode-bidi:plaintext}
+.bubble p{margin:0}.bubble p+p{margin-top:8px}
+.bubble code{font-family:'JetBrains Mono',Menlo,Consolas,monospace;direction:ltr;unicode-bidi:isolate;
+  background:color-mix(in srgb,var(--accent2) 16%,transparent);color:var(--text);padding:1px 6px;border-radius:6px;font-size:.85em}
+.bubble b{color:var(--accent2);font-weight:700}
+.chat.hamsoo-on .bubble b{color:color-mix(in srgb,var(--accent) 80%,var(--text))}
+
+/* popup replica — slightly shorter than chat, vertically centered */
+.popup{border:1px solid var(--brd);border-radius:var(--radius);background:var(--card-grad);overflow:hidden;
+  display:flex;flex-direction:column;height:100%;
+  box-shadow:0 26px 56px -36px rgba(0,0,0,.6)}
+.popup .phead{display:flex;align-items:center;gap:9px;padding:13px 15px;flex:0 0 auto;border-bottom:1px solid var(--brd);
+  background:color-mix(in srgb,var(--card) 55%,transparent)}
+.popup .phead img{border-radius:8px}
+.popup .phead .pt{font-weight:800;font-size:1rem}
+.popup .phead .pv{font-size:.68rem;color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);border-radius:6px;padding:0 6px}
+.popup .phead .sw{margin-inline-start:auto}
+.pbody{padding:12px 14px;overflow-y:auto;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:8px;overscroll-behavior:contain;transition:.2s;scrollbar-width:none}
+.pbody::-webkit-scrollbar{display:none}
+.popup:not(.on) .pbody{opacity:.55;filter:saturate(.35)}
+.pcard{border:1px solid var(--brd);border-radius:12px;padding:9px 10px;margin-top:0;background:var(--card2-grad)}
+.pcard.read{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-between}
+.pcard.read .srow,.pcard.read .toggle-row{margin-top:0}
+.pcard:first-child{margin-top:0}
+.pcard .ph{display:flex;align-items:center;justify-content:space-between;font-weight:700;font-size:.88rem;gap:8px;margin-bottom:2px}
+.site-row{display:flex;align-items:center;gap:10px}
+.site-dot{width:9px;height:9px;border-radius:50%;background:#10a37f;flex:0 0 auto}
+.site-row .sc{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.site-row .sc b{font-size:.9rem}
+.site-row .sc span{font-size:.75rem;color:var(--muted)}
+.site-row .sw{margin-inline-start:auto}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+.fbtn{border:1px solid var(--brd);background:transparent;color:var(--text);border-radius:9px;padding:5px 9px;
+  cursor:pointer;text-align:start;transition:.15s;font-family:inherit;line-height:1.3}
+.fbtn:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--brd))}
+.fbtn .fn{font-size:.78rem;font-weight:600;display:block}
+.fbtn .fs{font-size:.82rem;color:var(--muted)}
+.fbtn.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.fbtn.active .fs{color:var(--text)}
+.srow{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;margin-top:10px;font-size:.82rem}
+.srow:first-of-type{margin-top:8px}
+.srow label{color:var(--muted);white-space:nowrap}
+.srow output{color:var(--text);font-variant-numeric:tabular-nums;min-width:36px;text-align:end;font-weight:600}
+.srow input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+.toggle-row{display:flex;align-items:center;gap:10px;margin-top:11px}
+.toggle-row .txt{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.toggle-row .tl{font-size:.85rem}.toggle-row .td{font-size:.75rem;color:var(--muted)}
+.toggle-row .sw{margin-inline-start:auto}
+.badge-key{display:flex;align-items:center;justify-content:center;width:100%;margin-top:9px;
+  border:1px dashed var(--brd);border-radius:9px;padding:8px;font-family:'JetBrains Mono',monospace;font-weight:700;
+  color:var(--accent);background:transparent;cursor:pointer;transition:.15s;font-size:.9rem;letter-spacing:.02em}
+.badge-key:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.reset-link{display:block;width:100%;margin-top:0;background:none;border:0;color:var(--muted);font:inherit;
+  font-size:.8rem;cursor:pointer;text-align:center;transition:.15s}
+.reset-link:hover{color:var(--text)}
+
+/* switch */
+.sw{position:relative;display:inline-block;width:40px;height:22px;flex:0 0 auto}
+.sw input{opacity:0;width:0;height:0;position:absolute;margin:0}
+.sw .tr{position:absolute;inset:0;background:var(--brd);border-radius:999px;transition:.18s;cursor:pointer}
+.sw .tr::after{content:'';position:absolute;top:2px;inset-inline-start:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);transition:transform .18s}
+.sw input:checked+.tr{background:var(--accent)}
+.sw input:checked+.tr::after{transform:translateX(18px)}
+html[dir='rtl'] .sw input:checked+.tr::after{transform:translateX(-18px)}
+.sw input:focus-visible+.tr{outline:2px solid var(--accent);outline-offset:2px}
+
+/* features */
+.grid-feats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;text-align:start}
+.feat{border:1px solid var(--brd);background:var(--card-grad);border-radius:var(--radius);padding:22px;transition:.2s}
+.feat:hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--accent) 40%,var(--brd))}
+.feat .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:1.25rem;
+  background:linear-gradient(135deg,rgba(124,92,255,.2),rgba(34,211,238,.16));margin-bottom:13px}
+.feat h3{font-size:1.08rem;font-weight:700;margin-bottom:6px}
+.feat p{color:var(--muted);font-size:.94rem;margin:0}
+
+/* sites */
+.pills{display:flex;flex-wrap:wrap;gap:11px;justify-content:center;margin-top:36px;max-width:820px;margin-inline:auto}
+.pill{display:inline-flex;align-items:center;gap:9px;padding:10px 17px;border-radius:999px;
+  border:1px solid var(--brd);background:var(--card-grad);font-weight:600;font-size:.94rem;transition:.18s}
+.pill:hover{transform:translateY(-3px)}
+.pill .d{width:9px;height:9px;border-radius:50%}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px;text-align:start}
+.step{border:1px solid var(--brd);background:var(--card-grad);border-radius:var(--radius);padding:24px 22px}
+.step .n{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;color:#fff;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));margin-bottom:15px}
+.step h3{font-size:1.06rem;margin-bottom:6px}
+.step p{color:var(--muted);margin:0;font-size:.94rem}
+
+/* faq */
+.faq{max-width:720px;margin:34px auto 0;text-align:start}
+details{border:1px solid var(--brd);background:var(--card-grad);border-radius:13px;padding:2px 20px;margin-bottom:11px}
+details summary{list-style:none;cursor:pointer;font-weight:700;padding:15px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+details summary::-webkit-details-marker{display:none}
+details summary::after{content:'+';color:var(--accent);font-size:1.3rem;font-weight:700}
+details[open] summary::after{content:'\2212'}
+details p{color:var(--muted);margin:0 0 15px}
+
+/* final / download */
+.final .privacy-line{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:.92rem;margin-top:24px;width:100%}
+.final .credit{margin-top:28px;color:var(--muted);font-size:.88rem;display:flex;align-items:center;justify-content:center;gap:12px;width:100%;flex-wrap:wrap}
+.final .credit a{color:var(--muted);transition:color .18s}
+.final .credit a:hover{color:var(--accent2);text-decoration:underline}
+.ver{font-size:.78rem;padding:3px 10px;border:1px solid var(--brd);border-radius:999px;color:var(--muted);font-weight:600;font-family:var(--font-en);display:inline-block}
+
+@media(min-width:941px){
+  html{scroll-snap-type:y mandatory}
+  .slide{scroll-snap-align:start;scroll-snap-stop:always;height:100vh}
+  .dots{display:flex}
+}
+@media(max-width:940px){
+  .play-grid{grid-template-columns:1fr;height:auto}
+  .popup{height:auto;align-self:stretch}
+  .chatwin{height:60vh}
+  .grid-feats,.steps{grid-template-columns:1fr}
+  .scroll-cue{display:none}
+  .slide{min-height:auto;padding:calc(var(--nav) + 40px) 22px 60px}
+}
+</style>
+</head>
+<body id="top">
+
+<!-- NAV -->
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="icons/icon-48.png" width="32" height="32" alt="هم‌سو">
+      <span data-i18n="brand">هم‌سو</span>
+    </a>
+    <div class="tools">
+      <a class="icobtn" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener" title="GitHub">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+      </a>
+      <button class="icobtn" id="langBtn" title="Language">EN</button>
+      <button class="icobtn" id="themeBtn" title="Theme">☀️</button>
+      <a class="btn primary" href="#download" data-i18n="nav_get">دریافت</a>
+    </div>
+  </div>
+</header>
+
+<!-- DOT NAV -->
+<nav class="dots" id="dots" aria-label="section navigation"></nav>
+
+<!-- 1 HERO -->
+<section class="slide hero" id="top" data-dot="nav_home">
+  <div class="slide-inner">
+    <span class="badge"><span class="dot"></span><span data-i18n="hero_badge">پشتیبانی از ChatGPT، Gemini، NotebookLM و دیگر ابزارهای محبوب</span></span>
+    <h1 data-i18n="hero_title">تجربهٔ خوانایی بی‌نقص برای متون فارسی در هوش مصنوعی</h1>
+    <p class="lead" data-i18n="hero_sub">راست‌چین‌سازی هوشمند، فونت‌های زیبای فارسی و خوانایی بی‌نقص در ابزارهای محبوب هوش مصنوعی.</p>
+    <div class="cta">
+      <a class="btn primary" href="#download" data-i18n="cta_chrome">افزودن به کروم</a>
+      <a class="btn primary" href="#download" data-i18n="cta_firefox">افزودن به فایرفاکس</a>
+      <a class="btn ghost" href="#playground" data-i18n="cta_try">امتحان تعاملی</a>
+    </div>
+    <div class="trust" data-i18n="hero_note">رایگان • ۱۰۰٪ متن‌باز • بدون جمع‌آوری داده</div>
+  </div>
+  <a class="scroll-cue" href="#playground" aria-label="next">↓</a>
+</section>
+
+<!-- 2 PLAYGROUND -->
+<section class="slide" id="playground" data-dot="nav_try">
+  <div class="slide-inner">
+    <div class="play-head">
+      <p class="eyebrow" data-i18n="play_eyebrow">نمایش زنده</p>
+      <h2 data-i18n="play_title">خودتان تفاوت را لمس کنید</h2>
+      <div class="play-hint"><span class="pulse"></span><span data-i18n="play_hint">کلید «هم‌سو» را بزنید یا هر تنظیمی را تغییر دهید</span></div>
+    </div>
+    <div class="play-grid">
+      <div class="chatwin" id="chatwin">
+        <div class="bar">
+          <div class="bar-left"><i></i><i></i><i></i><span class="domain">🔒 chat.ai</span></div>
+          <span class="state-pill" id="statePill" data-i18n="state_off">بدون هم‌سو</span>
+        </div>
+        <div class="chat" id="chat">
+          <div class="msg user"><div class="avatar">🧑</div><div class="bubble"><p>چرا متن فارسی من در ChatGPT و Gemini این‌قدر به‌هم می‌ریزد؟ 🤔</p></div></div>
+          <div class="msg bot"><div class="avatar">✨</div><div class="bubble"><p>چون بیشتر چت‌ها متن را <b>چپ‌به‌راست (LTR)</b> نشان می‌دهند؛ پس جملهٔ فارسی از چپ شروع می‌شود و علائم («؟» و «.») به سمت اشتباه می‌پرند. هم‌سو این مشکلِ <code>bidi</code> را خودکار حل می‌کند.</p></div></div>
+          <div class="msg user"><div class="avatar">🧑</div><div class="bubble"><p>پس فقط راست‌چین می‌کند؟</p></div></div>
+          <div class="msg bot"><div class="avatar">✨</div><div class="bubble"><p>نه! ۶ فونت زیبای فارسی (<b>وزیرمتن، استعداد، ساحل، شبنم، صمیم، گندم</b>) هم می‌آورد. از پنل کناری فونت را عوض کن یا فایل دلخواهت با فرمت <code>.woff2</code> را بارگذاری کن.</p></div></div>
+          <div class="msg bot"><div class="avatar">✨</div><div class="bubble"><p>خوانایی کاملاً دست خودت است: <b>اندازه، فاصلهٔ سطر، ضخامت و فاصلهٔ حروف</b>. حتی اعداد 1402 را به ۱۴۰۲ تبدیل می‌کند، و کدهایی مثل <code>direction: rtl;</code> دست‌نخورده می‌مانند.</p></div></div>
+          <div class="msg bot"><div class="avatar">✨</div><div class="bubble"><p>تنظیمات برای هر سایت جداست، با <code>Alt+Shift+H</code> سریع خاموش/روشن می‌شود، و همه‌چیز <b>۱۰۰٪ محلی</b> در مرورگرِ خودت پردازش می‌شود. 🔒</p></div></div>
+        </div>
+      </div>
+
+      <div class="popup" id="popup">
+        <div class="phead">
+          <img src="icons/icon-48.png" width="26" height="26" alt="هم‌سو">
+          <span class="pt" data-i18n="brand">هم‌سو</span>
+          <span class="pv">v1.0.0</span>
+          <label class="sw" title="Enable Hamsoo"><input type="checkbox" id="m_master"><span class="tr"></span></label>
+        </div>
+        <div class="pbody">
+          <div class="pcard">
+            <div class="ph"><span data-i18n="pop_font">فونت</span></div>
+            <div class="fgrid" id="fgrid">
+              <button class="fbtn active" data-font="Vazirmatn"><span class="fn" data-fn-fa="وزیرمتن" data-fn-en="Vazirmatn">وزیرمتن</span><span class="fs" style="font-family:'Vazirmatn'">آ ب پ ۱۲۳</span></button>
+              <button class="fbtn" data-font="Estedad"><span class="fn" data-fn-fa="استعداد" data-fn-en="Estedad">استعداد</span><span class="fs" style="font-family:'Estedad'">آ ب پ ۱۲۳</span></button>
+              <button class="fbtn" data-font="Sahel"><span class="fn" data-fn-fa="ساحل" data-fn-en="Sahel">ساحل</span><span class="fs" style="font-family:'Sahel'">آ ب پ ۱۲۳</span></button>
+              <button class="fbtn" data-font="Shabnam"><span class="fn" data-fn-fa="شبنم" data-fn-en="Shabnam">شبنم</span><span class="fs" style="font-family:'Shabnam'">آ ب پ ۱۲۳</span></button>
+              <button class="fbtn" data-font="Samim"><span class="fn" data-fn-fa="صمیم" data-fn-en="Samim">صمیم</span><span class="fs" style="font-family:'Samim'">آ ب پ ۱۲۳</span></button>
+              <button class="fbtn" data-font="Gandom"><span class="fn" data-fn-fa="گندم" data-fn-en="Gandom">گندم</span><span class="fs" style="font-family:'Gandom'">آ ب پ ۱۲۳</span></button>
+            </div>
+          </div>
+          <div class="pcard read">
+            <div class="ph"><span data-i18n="pop_read">خوانایی</span></div>
+            <div class="srow"><label data-i18n="pop_size">اندازه</label><input type="range" id="m_size" min="12" max="22" step="1" value="16"><output id="o_size">16</output></div>
+            <div class="srow"><label data-i18n="pop_lh">فاصلهٔ سطر</label><input type="range" id="m_lh" min="1.3" max="2.5" step="0.1" value="1.9"><output id="o_lh">1.9</output></div>
+            <div class="srow"><label data-i18n="pop_weight">ضخامت</label><input type="range" id="m_weight" min="300" max="800" step="100" value="500"><output id="o_weight">500</output></div>
+            <div class="srow"><label data-i18n="pop_ls">فاصلهٔ حروف</label><input type="range" id="m_ls" min="0" max="1.5" step="0.1" value="0"><output id="o_ls">0</output></div>
+            <div class="toggle-row"><span class="txt"><span class="tl" data-i18n="pop_justify">هم‌ترازی دوطرفه</span></span><label class="sw"><input type="checkbox" id="m_justify"><span class="tr"></span></label></div>
+            <div class="toggle-row"><span class="txt"><span class="tl" data-i18n="pop_digits">ارقام فارسی</span><span class="td">1402 → ۱۴۰۲</span></span><label class="sw"><input type="checkbox" id="m_digits" checked><span class="tr"></span></label></div>
+          </div>
+          <button class="reset-link" id="m_reset" data-i18n="pop_reset">بازنشانی تنظیمات</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 FEATURES -->
+<section class="slide" id="features" data-dot="nav_features">
+  <div class="slide-inner">
+    <p class="eyebrow" data-i18n="feat_eyebrow">امکانات</p>
+    <h2 data-i18n="feat_title">هر چه برای خوانایی فارسی لازم دارید</h2>
+    <div class="grid-feats">
+      <div class="feat"><div class="ic">🧭</div><h3 data-i18n="fx1_t">راست‌چین خودکار</h3><p data-i18n="fx1_d">تشخیص لحظه‌ای جهت متن، بدون به‌هم‌ریختن واژگان انگلیسی و کد.</p></div>
+      <div class="feat"><div class="ic">🔤</div><h3 data-i18n="fx2_t">فونت‌های فارسی</h3><p data-i18n="fx2_d">۶ فونت متن‌باز زیبا به‌همراه امکان بارگذاری فونت دلخواه.</p></div>
+      <div class="feat"><div class="ic">⚙️</div><h3 data-i18n="fx3_t">تنظیم خوانایی</h3><p data-i18n="fx3_d">کنترل اندازه، فاصلهٔ سطر، ضخامت و فاصلهٔ حروف.</p></div>
+      <div class="feat"><div class="ic">🎯</div><h3 data-i18n="fx4_t">هر سایت + کلید میان‌بر</h3><p data-i18n="fx4_d">تنظیمات مستقل برای هر وب‌سایت و خاموش/روشن سریع با Alt+Shift+H.</p></div>
+      <div class="feat"><div class="ic" data-num-fa="۱۲۳" data-num-en="123">۱۲۳</div><h3 data-i18n="fx5_t">ارقام و علائم</h3><p data-i18n="fx5_d">تبدیل اعداد به فارسی و حفظ جای درست علائم نگارشی.</p></div>
+      <div class="feat"><div class="ic">🔒</div><h3 data-i18n="fx6_t">۱۰۰٪ خصوصی</h3><p data-i18n="fx6_d">پردازش کاملاً محلی در مرورگر، بدون ردیابی و سرور.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 SITES -->
+<section class="slide" id="sites" data-dot="nav_sites">
+  <div class="slide-inner">
+    <p class="eyebrow" data-i18n="sites_eyebrow">سازگاری</p>
+    <h2 data-i18n="sites_title">کار با ۱۲ پلتفرم محبوب</h2>
+    <p class="sub" data-i18n="sites_sub">و قابلیت افزودن دستی هر وب‌سایت دیگر.</p>
+    <div class="pills">
+      <span class="pill"><span class="d" style="background:#10a37f"></span>ChatGPT</span>
+      <span class="pill"><span class="d" style="background:#d97757"></span>Claude</span>
+      <span class="pill"><span class="d" style="background:#4285f4"></span>Gemini</span>
+      <span class="pill"><span class="d" style="background:#4d6bfe"></span>DeepSeek</span>
+      <span class="pill"><span class="d" style="background:#111"></span>Grok</span>
+      <span class="pill"><span class="d" style="background:#20b8cd"></span>Perplexity</span>
+      <span class="pill"><span class="d" style="background:#0a67c0"></span>Copilot</span>
+      <span class="pill"><span class="d" style="background:#f9ab00"></span>AI Studio</span>
+      <span class="pill"><span class="d" style="background:#6b3df5"></span>Qwen</span>
+      <span class="pill"><span class="d" style="background:#000"></span>Kimi</span>
+      <span class="pill"><span class="d" style="background:#5a3ff5"></span>Poe</span>
+      <span class="pill"><span class="d" style="background:#1a73e8"></span>NotebookLM</span>
+    </div>
+  </div>
+</section>
+
+<!-- 5 HOW -->
+<section class="slide" id="how" data-dot="nav_how">
+  <div class="slide-inner">
+    <p class="eyebrow" data-i18n="how_eyebrow">راهنمای استفاده</p>
+    <h2 data-i18n="how_title">راه‌اندازی در سه گام</h2>
+    <div class="steps">
+      <div class="step"><div class="n" data-num-fa="۱" data-num-en="1">۱</div><h3 data-i18n="s1_t">نصب افزونه</h3><p data-i18n="s1_d">هم‌سو را با یک کلیک روی کروم یا فایرفاکس نصب کنید.</p></div>
+      <div class="step"><div class="n" data-num-fa="۲" data-num-en="2">۲</div><h3 data-i18n="s2_t">ورود به هوش مصنوعی</h3><p data-i18n="s2_d">وارد ChatGPT، Gemini یا هر سایت پشتیبانی‌شده شوید.</p></div>
+      <div class="step"><div class="n" data-num-fa="۳" data-num-en="3">۳</div><h3 data-i18n="s3_t">خوانایی بی‌نقص</h3><p data-i18n="s3_d">صفحه خودکار راست‌چین و با فونت دلخواه شما نمایش داده می‌شود.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 FAQ -->
+<section class="slide" id="faq" data-dot="nav_faq">
+  <div class="slide-inner">
+    <p class="eyebrow" data-i18n="faq_eyebrow">پرسش‌ها</p>
+    <h2 data-i18n="faq_title">پرسش‌های پرتکرار</h2>
+    <div class="faq">
+      <details open><summary data-i18n="q1">آیا هم‌سو کاملاً رایگان است؟</summary><p data-i18n="a1">بله، هم‌سو پروژه‌ای ۱۰۰٪ رایگان و متن‌باز (Open Source) است.</p></details>
+      <details><summary data-i18n="q2">چه مرورگرهایی پشتیبانی می‌شوند؟</summary><p data-i18n="a2">مرورگرهای Google Chrome، Microsoft Edge، Brave، Opera و Mozilla Firefox.</p></details>
+      <details><summary data-i18n="q3">آیا اطلاعات یا متون من ذخیره می‌شوند؟</summary><p data-i18n="a3">خیر. هیچ داده‌ای از مرورگر شما خارج نمی‌شود و همه‌چیز محلی است.</p></details>
+      <details><summary data-i18n="q4">آیا امکان افزودن فونت شخصی وجود دارد؟</summary><p data-i18n="a4">بله! هر فایل فونت woff2. ،ttf. یا otf. را می‌توانید از تنظیمات اضافه کنید.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- 7 DOWNLOAD / FINAL -->
+<section class="slide final" id="download" data-dot="nav_get">
+  <div class="slide-inner">
+    <p class="eyebrow" data-i18n="dl_eyebrow">دریافت افزونه</p>
+    <h2 data-i18n="dl_title">همین حالا هم‌سو را نصب کنید</h2>
+    <p class="sub" data-i18n="dl_sub">آماده برای مرورگرهای کرومیوم (کروم، اج، بریو) و فایرفاکس.</p>
+    <div class="cta" style="margin-top:26px">
+      <a class="btn primary" href="https://github.com/NaxonM/hamsoo#installation" target="_blank" rel="noopener" data-i18n="cta_chrome">افزودن به کروم</a>
+      <a class="btn primary" href="https://github.com/NaxonM/hamsoo#installation" target="_blank" rel="noopener" data-i18n="cta_firefox">افزودن به فایرفاکس</a>
+    </div>
+    <div class="privacy-line">🛡️ <span data-i18n="priv_line">تمام پردازش‌ها محلی است — متن شما هرگز از مرورگر خارج نمی‌شود.</span></div>
+    <div class="credit">
+      <a href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener" data-i18n="foot_tag" data-html="true">توسعه‌یافته با ❤️ توسط <bdi>NaxonM</bdi> • ۱۰۰٪ رایگان و متن‌باز در گیت‌هاب</a>
+      <span class="ver">v1.0.0</span>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var D={
+    title:{fa:'هم‌سو — تجربهٔ خوانایی بی‌نقص و فونت فارسی در هوش مصنوعی',en:'Hamsoo — Beautiful Persian typography for AI chats'},
+    brand:{fa:'هم‌سو',en:'Hamsoo'},
+    nav_home:{fa:'خانه',en:'Home'},
+    nav_try:{fa:'امتحان کنید',en:'Try it'},
+    nav_features:{fa:'امکانات',en:'Features'},
+    nav_sites:{fa:'سایت‌ها',en:'Sites'},
+    nav_how:{fa:'راهنما',en:'How it works'},
+    nav_faq:{fa:'پرسش‌ها',en:'FAQ'},
+    nav_get:{fa:'دریافت',en:'Get'},
+    hero_badge:{fa:'پشتیبانی از ChatGPT، Gemini، NotebookLM و دیگر ابزارهای محبوب',en:'For ChatGPT, Gemini, NotebookLM & other AI chat tools'},
+    hero_title:{fa:'تجربهٔ خوانایی بی‌نقص برای متون فارسی در هوش مصنوعی',en:'Read Persian on AI, beautifully'},
+    hero_sub:{fa:'راست‌چین‌سازی هوشمند، فونت‌های زیبای فارسی و خوانایی بی‌نقص در ابزارهای محبوب هوش مصنوعی.',en:'Smart right-to-left, beautiful Persian fonts, and flawless readability across your favorite AI chat tools.'},
+    cta_chrome:{fa:'افزودن به کروم',en:'Add to Chrome'},
+    cta_firefox:{fa:'افزودن به فایرفاکس',en:'Add to Firefox'},
+    cta_try:{fa:'امتحان تعاملی',en:'Try it live'},
+    hero_note:{fa:'رایگان • ۱۰۰٪ متن‌باز • بدون جمع‌آوری داده',en:'Free • 100% Open Source • Privacy-first'},
+    play_eyebrow:{fa:'نمایش زنده',en:'Live Demo'},
+    play_title:{fa:'خودتان تفاوت را لمس کنید',en:'Feel the difference yourself'},
+    play_hint:{fa:'کلید «هم‌سو» را بزنید یا هر تنظیمی را تغییر دهید',en:'Flip “Hamsoo” on, or change any setting'},
+    state_off:{fa:'بدون هم‌سو',en:'Without Hamsoo'},
+    state_on:{fa:'هم‌سو فعال',en:'Hamsoo On'},
+    pop_thissite:{fa:'این وب‌سایت',en:'This site'},
+    pop_font:{fa:'فونت',en:'Font'},
+    pop_read:{fa:'خوانایی',en:'Readability'},
+    pop_size:{fa:'اندازه',en:'Size'},
+    pop_lh:{fa:'فاصلهٔ سطر',en:'Line height'},
+    pop_weight:{fa:'ضخامت',en:'Weight'},
+    pop_ls:{fa:'فاصلهٔ حروف',en:'Spacing'},
+    pop_justify:{fa:'هم‌ترازی دوطرفه',en:'Justify text'},
+    pop_digits:{fa:'ارقام فارسی',en:'Persian digits'},
+    pop_shortcut:{fa:'کلید میان‌بر',en:'Shortcut'},
+    pop_reset:{fa:'بازنشانی تنظیمات',en:'Reset settings'},
+    feat_eyebrow:{fa:'امکانات',en:'Features'},
+    feat_title:{fa:'هر چه برای خوانایی فارسی لازم دارید',en:'Everything you need for Persian on AI'},
+    fx1_t:{fa:'راست‌چین خودکار',en:'Automatic RTL'},
+    fx1_d:{fa:'تشخیص لحظه‌ای جهت متن، بدون به‌هم‌ریختن واژگان انگلیسی و کد.',en:'Instant bidi direction detection — without breaking English words or code.'},
+    fx2_t:{fa:'فونت‌های فارسی',en:'Persian Fonts'},
+    fx2_d:{fa:'۶ فونت متن‌باز زیبا به‌همراه امکان بارگذاری فونت دلخواه.',en:'Six beautiful open-source fonts, plus load your own custom font.'},
+    fx3_t:{fa:'تنظیم خوانایی',en:'Readability Controls'},
+    fx3_d:{fa:'کنترل اندازه، فاصلهٔ سطر، ضخامت و فاصلهٔ حروف.',en:'Tune size, line height, weight and letter spacing.'},
+    fx4_t:{fa:'هر سایت + کلید میان‌بر',en:'Per-site + Shortcut'},
+    fx4_d:{fa:'تنظیمات مستقل برای هر وب‌سایت و خاموش/روشن سریع با Alt+Shift+H.',en:'Independent settings per site and quick toggle with Alt+Shift+H.'},
+    fx5_t:{fa:'ارقام و علائم',en:'Digits & Punctuation'},
+    fx5_d:{fa:'تبدیل اعداد به فارسی و حفظ جای درست علائم نگارشی.',en:'Convert digits to Persian and keep punctuation on the right side.'},
+    fx6_t:{fa:'۱۰۰٪ خصوصی',en:'100% Private'},
+    fx6_d:{fa:'پردازش کاملاً محلی در مرورگر، بدون ردیابی و سرور.',en:'Fully local processing in your browser — no tracking, no servers.'},
+    sites_eyebrow:{fa:'سازگاری',en:'Compatibility'},
+    sites_title:{fa:'کار با ۱۲ پلتفرم محبوب',en:'Works on 12 popular AI platforms'},
+    sites_sub:{fa:'و قابلیت افزودن دستی هر وب‌سایت دیگر.',en:'Plus any custom site you add yourself.'},
+    how_eyebrow:{fa:'راهنمای استفاده',en:'Quick Start'},
+    how_title:{fa:'راه‌اندازی در سه گام',en:'Up and running in 3 steps'},
+    s1_t:{fa:'نصب افزونه',en:'Install'},
+    s1_d:{fa:'هم‌سو را با یک کلیک روی کروم یا فایرفاکس نصب کنید.',en:'Add Hamsoo to Chrome or Firefox in one click.'},
+    s2_t:{fa:'ورود به هوش مصنوعی',en:'Open AI Chat'},
+    s2_d:{fa:'وارد ChatGPT، Gemini یا هر سایت پشتیبانی‌شده شوید.',en:'Open ChatGPT, Gemini or any supported site.'},
+    s3_t:{fa:'خوانایی بی‌نقص',en:'Perfect Readability'},
+    s3_d:{fa:'صفحه خودکار راست‌چین و با فونت دلخواه شما نمایش داده می‌شود.',en:'Pages auto right-align and render in your chosen font.'},
+    faq_eyebrow:{fa:'پرسش‌ها',en:'FAQ'},
+    faq_title:{fa:'پرسش‌های پرتکرار',en:'Frequently asked questions'},
+    q1:{fa:'آیا هم‌سو کاملاً رایگان است؟',en:'Is Hamsoo completely free?'},
+    a1:{fa:'بله، هم‌سو پروژه‌ای ۱۰۰٪ رایگان و متن‌باز (Open Source) است.',en:'Yes. Hamsoo is 100% free and open source.'},
+    q2:{fa:'چه مرورگرهایی پشتیبانی می‌شوند؟',en:'Which browsers are supported?'},
+    a2:{fa:'مرورگرهای Google Chrome، Microsoft Edge، Brave، Opera و Mozilla Firefox.',en:'Google Chrome, Microsoft Edge, Brave, Opera and Mozilla Firefox.'},
+    q3:{fa:'آیا اطلاعات یا متون من ذخیره می‌شوند؟',en:'Do you store my data or text?'},
+    a3:{fa:'خیر. هیچ داده‌ای از مرورگر شما خارج نمی‌شود و همه‌چیز محلی است.',en:'No. Nothing ever leaves your browser — everything is local.'},
+    q4:{fa:'آیا امکان افزودن فونت شخصی وجود دارد؟',en:'Can I add my own custom font?'},
+    a4:{fa:'بله! هر فایل فونت woff2.، ttf. یا otf. را می‌توانید از تنظیمات اضافه کنید.',en:'Yes! Load any .woff2, .ttf or .otf font file from the settings.'},
+    dl_eyebrow:{fa:'دریافت افزونه',en:'Get the extension'},
+    dl_title:{fa:'همین حالا هم‌سو را نصب کنید',en:'Install Hamsoo now'},
+    dl_sub:{fa:'آماده برای مرورگرهای کرومیوم (کروم، اج، بریو) و فایرفاکس.',en:'Ready for Chromium browsers (Chrome, Edge, Brave) and Firefox.'},
+    priv_line:{fa:'تمام پردازش‌ها محلی است — متن شما هرگز از مرورگر خارج نمی‌شود.',en:'All processing is local — your text never leaves your browser.'},
+    foot_tag:{fa:'توسعه‌یافته با ❤️ توسط <bdi>NaxonM</bdi> • ۱۰۰٪ رایگان و متن‌باز در گیت‌هاب',en:'Made with ❤️ by <bdi>NaxonM</bdi> • Free & Open Source on GitHub'}
+  };
+
+  var el=function(s){return document.querySelector(s);};
+  var lang='fa', theme='dark', curFont='Vazirmatn';
+  var FA='۰۱۲۳۴۵۶۷۸۹';
+  var langBtn=el('#langBtn'), themeBtn=el('#themeBtn');
+  var chat=el('#chat'), chatwin=el('#chatwin'), popup=el('#popup'), statePill=el('#statePill');
+  var m_master=el('#m_master');
+  var m_size=el('#m_size'), m_lh=el('#m_lh'), m_weight=el('#m_weight'), m_ls=el('#m_ls');
+  var o_size=el('#o_size'), o_lh=el('#o_lh'), o_weight=el('#o_weight'), o_ls=el('#o_ls');
+  var m_justify=el('#m_justify'), m_digits=el('#m_digits'), m_reset=el('#m_reset');
+
+  function setTheme(t){ theme=t; document.documentElement.setAttribute('data-theme',t); themeBtn.textContent=(t==='dark'?'\u2600\ufe0f':'\ud83c\udf19'); try{localStorage.setItem('hamsoo_theme',t);}catch(e){} }
+  function setLang(l){
+    lang=l; document.documentElement.lang=l; document.documentElement.dir=(l==='fa'?'rtl':'ltr');
+    document.querySelectorAll('[data-i18n]').forEach(function(e){ var k=e.getAttribute('data-i18n'); if(D[k]) { if(e.hasAttribute('data-html')) e.innerHTML=D[k][l]; else e.textContent=D[k][l]; } });
+    document.title=D.title[l];
+    langBtn.textContent=(l==='fa'?'EN':'FA');
+    document.querySelectorAll('.fbtn .fn').forEach(function(e){ e.textContent=(l==='en'?e.getAttribute('data-fn-en'):e.getAttribute('data-fn-fa')); });
+    document.querySelectorAll('[data-num-fa]').forEach(function(e){ e.textContent=(l==='en'?e.getAttribute('data-num-en'):e.getAttribute('data-num-fa')); });
+    buildDotLabels();
+    try{localStorage.setItem('hamsoo_lang',l);}catch(e){}
+  }
+
+  function walk(node,cb){ for(var n=node.firstChild;n;n=n.nextSibling){ if(n.nodeType===3){cb(n);} else if(n.nodeType===1 && n.tagName!=='CODE'){walk(n,cb);} } }
+  function setDigits(on){ walk(chat,function(t){ if(on){ if(t.__o==null)t.__o=t.nodeValue; t.nodeValue=t.__o.replace(/[0-9]/g,function(d){return FA[+d];}); } else if(t.__o!=null){ t.nodeValue=t.__o; } }); }
+
+  function apply(){
+    var on=m_master.checked, act=on;
+    chatwin.classList.toggle('on',act);
+    popup.classList.toggle('on',on);
+    chat.classList.toggle('hamsoo-on',act);
+    statePill.textContent=(act?D.state_on[lang]:D.state_off[lang]);
+    statePill.setAttribute('data-i18n',act?'state_on':'state_off');
+    chat.style.setProperty('--demo-font',curFont);
+    chat.style.setProperty('--demo-size',m_size.value);
+    chat.style.setProperty('--demo-lh',m_lh.value);
+    chat.style.setProperty('--demo-weight',m_weight.value);
+    chat.style.setProperty('--demo-ls',m_ls.value);
+    chat.style.setProperty('--demo-align',m_justify.checked?'justify':'right');
+    o_size.value=m_size.value; o_lh.value=m_lh.value; o_weight.value=m_weight.value; o_ls.value=m_ls.value;
+    setDigits(act&&m_digits.checked);
+  }
+  function ensureOn(){ if(!m_master.checked)m_master.checked=true; }
+
+  el('#fgrid').addEventListener('click',function(e){ var b=e.target.closest('.fbtn'); if(!b)return; curFont=b.getAttribute('data-font'); document.querySelectorAll('#fgrid .fbtn').forEach(function(x){x.classList.toggle('active',x===b);}); ensureOn(); apply(); });
+  [m_size,m_lh,m_weight,m_ls].forEach(function(r){ r.addEventListener('input',function(){ ensureOn(); apply(); }); });
+  [m_justify,m_digits].forEach(function(c){ c.addEventListener('change',function(){ ensureOn(); apply(); }); });
+  m_master.addEventListener('change',apply);
+  m_reset.addEventListener('click',function(){ curFont='Vazirmatn'; document.querySelectorAll('#fgrid .fbtn').forEach(function(x){x.classList.toggle('active',x.getAttribute('data-font')==='Vazirmatn');}); m_size.value=16;m_lh.value=1.9;m_weight.value=500;m_ls.value=0;m_justify.checked=false;m_digits.checked=true; apply(); });
+  langBtn.addEventListener('click',function(){ setLang(lang==='fa'?'en':'fa'); apply(); });
+  themeBtn.addEventListener('click',function(){ setTheme(theme==='dark'?'light':'dark'); });
+
+  // slideshow dot navigation
+  var slides=[].slice.call(document.querySelectorAll('.slide'));
+  var dotsEl=el('#dots');
+  slides.forEach(function(s){ var b=document.createElement('button'); b.setAttribute('data-key',s.getAttribute('data-dot')); var sp=document.createElement('span'); b.appendChild(sp); b.addEventListener('click',function(){ s.scrollIntoView({behavior:'smooth'}); }); dotsEl.appendChild(b); });
+  function buildDotLabels(){ [].forEach.call(dotsEl.children,function(b){ var k=b.getAttribute('data-key'); var txt=D[k]?D[k][lang]:''; b.querySelector('span').textContent=txt; b.setAttribute('aria-label',txt); }); }
+  if('IntersectionObserver' in window){ var io=new IntersectionObserver(function(es){ es.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in-view'); var i=slides.indexOf(en.target); [].forEach.call(dotsEl.children,function(b,j){ b.classList.toggle('active',j===i); }); } }); },{threshold:0.4}); slides.forEach(function(s){io.observe(s);}); } else { slides.forEach(function(s){s.classList.add('in-view');}); }
+  document.addEventListener('keydown',function(e){ var t=e.target; if(t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||(t.closest&&t.closest('.popup'))))return; var dir=({ArrowDown:1,PageDown:1,ArrowUp:-1,PageUp:-1})[e.key]; if(!dir)return; e.preventDefault(); var cur=0,best=1e9; slides.forEach(function(s,i){ var d=Math.abs(s.getBoundingClientRect().top); if(d<best){best=d;cur=i;} }); var nx=Math.min(slides.length-1,Math.max(0,cur+dir)); slides[nx].scrollIntoView({behavior:'smooth'}); });
+
+  // boot
+  var sl='fa', st='dark'; try{ sl=localStorage.getItem('hamsoo_lang')||'fa'; st=localStorage.getItem('hamsoo_theme')||'dark'; }catch(e){}
+  setTheme(st); setLang(sl); apply();
+})();
+</script>
+</body>
+</html>
