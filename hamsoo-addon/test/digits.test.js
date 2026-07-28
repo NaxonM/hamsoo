@@ -20,7 +20,11 @@ const EXPECTED_CHECKS = [
   'arabic-indic digits applied to rtl prose',
   'latin digits no longer present in rtl prose',
   'code block digits are left untouched',
-  'editable field digits are left untouched'
+  'editable field digits are left untouched',
+  'nested rtl paragraph inside an rtl wrapper is converted',
+  'nested latin paragraph inside an rtl wrapper keeps ascii digits',
+  'bare contenteditable digits are left untouched',
+  'digits are restored when a block stops being rtl'
 ];
 
 const chromeBin = findChrome();
@@ -46,6 +50,19 @@ if (!chromeBin) {
           '<p id="prose">\u0633\u0644\u0627\u0645 123 \u062f\u0646\u06cc\u0627\u06cc \u0631\u0648\u0634\u0646</p>',
           '<pre id="code"><code>const x = 123;</code></pre>',
           '<textarea id="editable">123</textarea>',
+          // A wrapper that is itself collected by SELECTOR and resolves RTL,
+          // holding one Persian and one English paragraph. The wrapper is
+          // classified first, so without per-block scoping its digit pass
+          // walked into the English paragraph and converted its digits too.
+          '<div class="markdown" id="wrap">',
+          '<p id="fa-nested">\u0633\u0644\u0627\u0645 123 \u062f\u0646\u06cc\u0627\u06cc \u0631\u0648\u0634\u0646 \u0633\u0644\u0627\u0645 \u062f\u0646\u06cc\u0627\u06cc \u0631\u0648\u0634\u0646 \u0633\u0644\u0627\u0645 \u062f\u0646\u06cc\u0627\u06cc \u0631\u0648\u0634\u0646</p>',
+          '<p id="en-nested">Build 456 ready</p>',
+          '</div>',
+          // Shorthand contenteditable (no ="true"): still an editable field.
+          '<div contenteditable id="ce-bare">123</div>',
+          // Starts RTL so its digits are localized, then loses the Persian
+          // run at runtime and must hand the ASCII digits back.
+          '<p id="flip"><span id="keep">123</span> <span id="tail">\u0633\u0644\u0627\u0645 \u062f\u0646\u06cc\u0627\u06cc \u0631\u0648\u0634\u0646 \u0641\u0627\u0631\u0633\u06cc</span></p>',
           '<script src="stub.js"></script>',
           '<script src="shared/settings-util.js"></script>',
           '<script src="content.js"></script>',
