@@ -201,7 +201,7 @@
       weightLabel: 'Font weight',
       letterLabel: 'Letter spacing',
       alignLabel: 'Text alignment',
-      alignStart: 'Right',
+      alignStart: 'Start',
       alignJustify: 'Justify',
       widthLabel: 'Reading width',
       widthOff: 'Full',

@@ -28,8 +28,11 @@ execFileSync(process.execPath, [path.join(ROOT, 'build.js')], { stdio: 'ignore' 
 const dir = createHarnessDir({
   seedSettings: {
     enabled: true,
+    // The setting is `font`, not `fontFamily`. Seeding the wrong key meant
+    // normalization dropped it and every preview screenshot silently rendered
+    // with the DEFAULT font instead of the one being previewed.
     fontEnabled: true,
-    fontFamily: 'Vazirmatn',
+    font: 'Vazirmatn',
     readabilityEnabled: true,
     customSites: [
       'https://chat.example.ir/*',
