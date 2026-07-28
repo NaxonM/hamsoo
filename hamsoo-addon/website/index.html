@@ -445,7 +445,11 @@ details p{color:var(--muted);margin:0 0 15px}
     <h2 data-i18n="dl_title">همین حالا هم‌سو را نصب کنید</h2>
     <p class="sub" data-i18n="dl_sub">آماده برای مرورگرهای کرومیوم (کروم، اج، بریو) و فایرفاکس.</p>
     <div class="cta" style="margin-top:26px">
-      <a class="btn primary" href="https://github.com/NaxonM/hamsoo#installation" target="_blank" rel="noopener" data-i18n="cta_chrome">افزودن به کروم</a>
+      <!-- Points at the actual Chromium build from release.json. This used to
+           link to the README's #installation anchor, so the primary "Add to
+           Chrome" call to action sent users to documentation rather than to a
+           download -- while the zip URL sat unused in release.json. -->
+      <a class="btn primary" href="https://github.com/NaxonM/hamsoo/releases/download/v1.3.0/hamsoo-chromium.zip" data-release-download="chromium" data-i18n="cta_chrome">افزودن به کروم</a>
       <a class="btn primary" href="https://addons.mozilla.org/en-US/firefox/addon/hamsoo-%D9%87%D9%85-%D8%B3%D9%88/" target="_blank" rel="noopener" data-i18n="cta_firefox">افزودن به فایرفاکس</a>
     </div>
     <div class="privacy-line">🛡️ <span data-i18n="priv_line">تمام پردازش‌ها محلی است — متن شما هرگز از مرورگر خارج نمی‌شود.</span></div>
