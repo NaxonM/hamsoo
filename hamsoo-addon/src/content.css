@@ -122,7 +122,12 @@ html[data-hamsoo-on][data-hamsoo-justify] [data-hamsoo="rtl"] {
 }
 
 /* Phase 9: reading width (measure). Caps line length on prose blocks for
-   easier reading; table cells are excluded so tables keep their layout. */
-html[data-hamsoo-on][data-hamsoo-measure] [data-hamsoo="rtl"]:not(td):not(th) {
+   easier reading; table cells are excluded so tables keep their layout.
+
+   Code is excluded too. A measure cap is a PROSE readability setting, but the
+   rule applied to any RTL-marked block, so a fenced code block or a preformatted
+   sample inside a Persian answer got its width clamped and started wrapping
+   mid-token -- with !important, the site's own overflow handling could not win. */
+html[data-hamsoo-on][data-hamsoo-measure] [data-hamsoo="rtl"]:not(td):not(th):not(pre):not(code) {
   max-width: var(--hamsoo-measure, 70ch) !important;
 }

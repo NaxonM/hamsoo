@@ -25,23 +25,32 @@
     });
   }
 
+  // Every call opened a fresh connection and never closed it. In the popup and
+  // options page that is a slow leak; in the background worker it is worse,
+  // because a still-open connection blocks any future `onupgradeneeded`, so a
+  // schema bump in a later version would hang instead of upgrading.
+  async function withDb(run) {
+    const db = await open();
+    try {
+      return await run(db);
+    } finally {
+      try { db.close(); } catch (_) { /* already closing */ }
+    }
+  }
+
   globalThis.HamsooFontDB = {
     // font: { id, name, format, bytes: ArrayBuffer, size, added }
-    async put(font) {
-      const db = await open();
-      return promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).put(font));
+    put(font) {
+      return withDb(db => promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).put(font)));
     },
-    async get(id) {
-      const db = await open();
-      return promisify(db.transaction(STORE).objectStore(STORE).get(id));
+    get(id) {
+      return withDb(db => promisify(db.transaction(STORE).objectStore(STORE).get(id)));
     },
-    async remove(id) {
-      const db = await open();
-      return promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(id));
+    remove(id) {
+      return withDb(db => promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(id)));
     },
-    async list() {
-      const db = await open();
-      return promisify(db.transaction(STORE).objectStore(STORE).getAll());
+    list() {
+      return withDb(db => promisify(db.transaction(STORE).objectStore(STORE).getAll()));
     }
   };
 })();

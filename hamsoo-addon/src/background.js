@@ -394,6 +394,15 @@ api.contextMenus.onClicked.addListener((info, tab) => {
 function fixSelection() {
   function setRTL(element) {
     if (!(element instanceof HTMLElement)) return;
+    // Record what this fix touched so teardown can undo it. Without a marker
+    // these inline !important styles were permanent for the life of the page.
+    // The marker also carries the site's ORIGINAL dir= value, because this
+    // function overwrites it: remembering only that an attribute existed would
+    // leave the page's own dir="ltr" permanently replaced by our dir="rtl".
+    if (!element.hasAttribute('data-hamsoo-fix')) {
+      const priorDir = element.getAttribute('dir');
+      element.setAttribute('data-hamsoo-fix', priorDir === null ? 'dir' : 'keep:' + priorDir);
+    }
     element.setAttribute('dir', 'rtl');
     element.style.setProperty('direction', 'rtl', 'important');
     element.style.setProperty('text-align', 'start', 'important');
@@ -402,9 +411,11 @@ function fixSelection() {
 
   const selection = window.getSelection();
   const targets = [];
+  let range = null;
 
   if (selection && selection.rangeCount && selection.toString().trim()) {
-    let node = selection.getRangeAt(0).commonAncestorContainer;
+    range = selection.getRangeAt(0);
+    let node = range.commonAncestorContainer;
     if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
     if (node) targets.push(node);
   } else if (document.activeElement) {
@@ -413,9 +424,15 @@ function fixSelection() {
 
   for (const element of targets) {
     setRTL(element);
-    if (element.querySelectorAll) {
-      element.querySelectorAll('p, div, li, span, h1, h2, h3, h4, h5, h6, td, th')
-        .forEach(setRTL);
+    if (!element.querySelectorAll) continue;
+    const descendants = element.querySelectorAll('p, div, li, span, h1, h2, h3, h4, h5, h6, td, th');
+    for (const child of descendants) {
+      // The common ancestor of a selection can be far larger than the selection
+      // itself -- for a range spanning two paragraphs it is often <body>, and
+      // this loop then force-flipped EVERY block on the page. Restrict the walk
+      // to elements the selection actually intersects.
+      if (range && !range.intersectsNode(child)) continue;
+      setRTL(child);
     }
   }
 }
