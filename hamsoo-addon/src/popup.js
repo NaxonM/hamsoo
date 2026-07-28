@@ -78,8 +78,9 @@ const DEFAULTS = Object.freeze({
   // True once the shortcut is confirmed registered as the actual browser-wide
   // command binding, not just matched locally by the content-script listener.
   shortcutIsGlobal: true,
-  // Kept in sync with HamsooUtil.SCHEMA_VERSION by normalize().
-  schemaVersion: 2,
+  // Read from the shared util rather than restated, so DEFAULTS can never claim
+  // an older schema than the one migrate/normalize actually write.
+  schemaVersion: HamsooUtil.SCHEMA_VERSION,
   syncVersion: 0
 });
 
@@ -450,6 +451,13 @@ function normalize(value) {
     punctuationFixEnabled: raw.punctuationFixEnabled !== false,
     shortcut: typeof raw.shortcut === 'string' ? raw.shortcut : 'Alt+Shift+R',
     shortcutIsGlobal: raw.shortcutIsGlobal !== false,
+    // Onboarding and feedback-ask state. These are NOT popup-owned fields, but
+    // normalize() is the shape every popup save is built from, so omitting them
+    // meant opening the popup and touching any control erased the install
+    // clock, the recorded usage days, and any "later"/"never" the user had
+    // already chosen -- and exports taken from popup state lost them too.
+    onboardedVersion: HamsooUtil.normalizeOnboardedVersion(raw.onboardedVersion),
+    support: HamsooUtil.normalizeSupport(raw.support, Date.now()),
     // syncVersion is a monotonic counter incremented on every user-initiated
     // save. The background uses it to resolve cross-device conflicts.
     syncVersion: typeof raw.syncVersion === 'number' && raw.syncVersion >= 0 ? Math.floor(raw.syncVersion) : 0

@@ -20,7 +20,12 @@
   function clampLetterSpacing(v) { return Math.min(1.5, Math.max(0, Number(v) || 0)); }
   function clampMeasure(v) { return Number(v) ? Math.min(100, Math.max(40, Number(v))) : 0; }
   function normalizeAlign(v) { return v === 'justify' ? 'justify' : 'start'; }
-  function normalizeDigitsScript(v) { return v === 'ar' ? 'ar' : 'fa'; }
+  // Case- and whitespace-insensitive: a hand-edited backup carrying 'AR' used to
+  // fall through to Persian digits silently while the UI still read "Arabic".
+  function normalizeDigitsScript(v) {
+    var s = typeof v === 'string' ? v.trim().toLowerCase() : '';
+    return s === 'ar' ? 'ar' : 'fa';
+  }
 
   var DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -488,27 +493,91 @@
     }
     merged.customFonts = mergeCustomFonts(base.customFonts, incoming.customFonts);
     merged.support = mergeSupport(base.support, incoming.support);
-    // The tour is per-device: a device that has never shown it must still be
-    // able to, so take the lower of the two markers rather than the remote one.
-    merged.onboardedVersion = Math.min(
+    // Seen on any device counts as seen. Math.min let a slim or fresh remote
+    // copy (onboardedVersion 0, or the field missing entirely) drag a fully
+    // onboarded device back to 0, corrupting the marker on every pull.
+    merged.onboardedVersion = Math.max(
       normalizeOnboardedVersion(base.onboardedVersion),
       normalizeOnboardedVersion(incoming.onboardedVersion)
     );
+    // Picked selectors are per-host additive facts, not a single value to
+    // overwrite. A plain remote overwrite meant a device publishing an empty
+    // map ({}) erased every pick another device had made.
+    merged.customSelectors = mergeCustomSelectors(base.customSelectors, incoming.customSelectors);
     return merged;
   }
+
+  // Union of per-host selector lists. Empty/missing on either side contributes
+  // nothing rather than clearing the other side.
+  function mergeCustomSelectors(localMap, remoteMap) {
+    var a = localMap && typeof localMap === 'object' ? localMap : {};
+    var b = remoteMap && typeof remoteMap === 'object' ? remoteMap : {};
+    var out = {};
+    var host;
+    for (host in a) {
+      if (!Object.prototype.hasOwnProperty.call(a, host)) continue;
+      if (Array.isArray(a[host]) && a[host].length) out[host] = a[host].slice();
+    }
+    for (host in b) {
+      if (!Object.prototype.hasOwnProperty.call(b, host)) continue;
+      if (!Array.isArray(b[host]) || !b[host].length) continue;
+      var list = Array.isArray(out[host]) ? out[host] : [];
+      for (var i = 0; i < b[host].length; i += 1) {
+        if (list.indexOf(b[host][i]) === -1) list.push(b[host][i]);
+      }
+      out[host] = list.slice(-20);
+    }
+    return out;
+  }
+
+  // Chrome's per-item sync ceiling. A realistic power-user payload (many custom
+  // sites, picked selectors, per-site overrides) blows past this, and the old
+  // code turned the rejection into a silent success.
+  var SYNC_QUOTA_BYTES_PER_ITEM = 8192;
+
+  function estimateSyncBytes(slim) {
+    try {
+      var json = JSON.stringify({ settings: slim });
+      if (typeof Blob === 'function') return new Blob([json]).size;
+      if (typeof TextEncoder === 'function') return new TextEncoder().encode(json).length;
+      return json.length;
+    } catch (_) { return 0; }
+  }
+
+  // Last sync failure, readable by any UI that wants to tell the user their
+  // devices have stopped agreeing. Null means the last mirror attempt succeeded.
+  var lastSyncError = null;
+  function getLastSyncError() { return lastSyncError; }
 
   // Single persistence funnel. Bumps the conflict-resolution counter, writes
   // the full copy to storage.local, and mirrors a slim copy to storage.sync.
   // Every writer (popup, fonts page, background toggle) goes through this so
   // the version counter and the two storage areas cannot diverge.
+  //
+  // The local write is the source of truth, so a sync failure still resolves
+  // true -- but it is now recorded and reported through opts.onSyncError
+  // instead of being swallowed.
   function persistSettings(api, settings, options) {
     var opts = options || {};
     if (!api || !api.storage || !api.storage.local) return Promise.resolve(false);
     if (opts.bump !== false) incrementSyncVersion(settings);
     return Promise.resolve(api.storage.local.set({ settings: settings })).then(function () {
       if (!api.storage.sync) return true;
-      return Promise.resolve(api.storage.sync.set({ settings: getSlimSettingsForSync(settings) }))
-        .then(function () { return true; }, function () { return true; });
+      var slim = getSlimSettingsForSync(settings);
+      var bytes = estimateSyncBytes(slim);
+      if (bytes > SYNC_QUOTA_BYTES_PER_ITEM) {
+        lastSyncError = { kind: 'quota', bytes: bytes, limit: SYNC_QUOTA_BYTES_PER_ITEM };
+        if (typeof opts.onSyncError === 'function') opts.onSyncError(lastSyncError);
+        return true;
+      }
+      return Promise.resolve(api.storage.sync.set({ settings: slim })).then(function () {
+        lastSyncError = null;
+        return true;
+      }, function (err) {
+        lastSyncError = { kind: 'write', message: String((err && err.message) || err || 'sync write failed') };
+        if (typeof opts.onSyncError === 'function') opts.onSyncError(lastSyncError);
+        return true;
+      });
     });
   }
 
@@ -526,9 +595,32 @@
 
   // Deliberately strict: rejects ports, <all_urls>, and free-form garbage.
   var MATCH_PATTERN_RE = /^https?:\/\/(\*\.)?[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\/\*$/;
+
+  // Registry suffixes that are not a single organization. Wildcarding one of
+  // these is the same over-reach as `*.com`: it asks for every site under a
+  // public registry rather than every subdomain of one site.
+  var BROAD_WILDCARD_SUFFIXES = [
+    'co.uk', 'org.uk', 'ac.uk', 'gov.uk', 'com.au', 'net.au', 'org.au',
+    'co.jp', 'or.jp', 'ne.jp', 'co.nz', 'co.za', 'com.br', 'com.cn',
+    'com.tr', 'co.in', 'co.kr', 'com.mx', 'com.ar', 'co.ir', 'ac.ir'
+  ];
+
+  // A wildcard host must name an actual site (`*.example.com`), never a bare
+  // registry (`*.com`, `*.co.uk`). The browser may accept the broad form, which
+  // is exactly the problem: an import could quietly request host permissions
+  // over an entire TLD.
   function isValidMatchPattern(p) {
     if (typeof p !== 'string' || !p) return false;
-    return MATCH_PATTERN_RE.test(p);
+    if (!MATCH_PATTERN_RE.test(p)) return false;
+    var host = p.replace(/^https?:\/\//, '').replace(/\/\*$/, '');
+    if (host.indexOf('*.') !== 0) return true;
+    var rest = host.slice(2).toLowerCase();
+    var labels = rest.split('.');
+    // `*.com` -- one label is a bare TLD.
+    if (labels.length < 2) return false;
+    // `*.co.uk` -- two labels, but both belong to the registry.
+    if (BROAD_WILDCARD_SUFFIXES.indexOf(rest) !== -1) return false;
+    return true;
   }
 
   function sanitizeMatchPatterns(list) {
@@ -678,8 +770,12 @@
     incrementSyncVersion: incrementSyncVersion,
     getSlimSettingsForSync: getSlimSettingsForSync,
     mergeCustomFonts: mergeCustomFonts,
+    mergeCustomSelectors: mergeCustomSelectors,
     mergeSyncedSettings: mergeSyncedSettings,
     persistSettings: persistSettings,
+    getLastSyncError: getLastSyncError,
+    estimateSyncBytes: estimateSyncBytes,
+    SYNC_QUOTA_BYTES_PER_ITEM: SYNC_QUOTA_BYTES_PER_ITEM,
     patternFromUrl: patternFromUrl,
     isValidMatchPattern: isValidMatchPattern,
     sanitizeMatchPatterns: sanitizeMatchPatterns,
