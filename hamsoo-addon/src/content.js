@@ -68,8 +68,21 @@
     customSelectors: {}
   });
 
-  const RTL_RE = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
-  const RTL_RE_G = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+  // Strong RTL LETTERS. The Arabic block's two digit runs are deliberately
+  // carved out: \u0660-\u0669 (Arabic-Indic digits) and \u06F0-\u06F9
+  // (extended/Persian digits).
+  //
+  // Counting digits as RTL letters had two consequences. A block containing
+  // nothing but numbers scored 100% RTL and was flipped, so a bare "2024" in
+  // an English page took an RTL base. Worse, it made digit localization
+  // SELF-REINFORCING: converting "123" to "\u06f1\u06f2\u06f3" inserted characters that
+  // this pattern then read as RTL, so the block could never test as non-RTL
+  // again and its digits could never be restored -- the conversion was
+  // effectively irreversible. Digits are directionally neutral; only letters
+  // should establish direction.
+  const RTL_LETTER_CLASS = '[\\u0590-\\u05FF\\u0600-\\u065F\\u066A-\\u06EF\\u06FA-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]';
+  const RTL_RE = new RegExp(RTL_LETTER_CLASS);
+  const RTL_RE_G = new RegExp(RTL_LETTER_CLASS, 'g');
   const LATIN_LETTER_RE = /[A-Za-z]/;
   const LATIN_LETTER_RE_G = /[A-Za-z]/g;
 
@@ -183,9 +196,57 @@
 
   // Only blocks with strong programming signals stay LTR; mixed prose like
   // "VM = \u06a9\u0644\u0627\u0633" is treated as text, not code.
-  // Strong signals: on their own they reliably indicate real code (line-
-  // anchored keywords, HTML tags, shebangs/includes, well-known API calls).
-  const CODE_STRONG_RE = /(^|\n)\s*(const|let|var|function|func|fn|class|struct|enum|impl|trait|import|export|from|require|module|if|elif|else|for|while|do|switch|case|return|try|catch|except|finally|throw|raise|def|lambda|async|await|public|private|protected|static|void|new|package|interface|namespace|using|echo|print|println|printf|select|insert|update|delete)\b|#include|#!|(^|\n)\s*\/\/|<\/?[a-z][\s\S]*?>|\b(console\.log|System\.out|printf|println)\b/i;
+  // Strong signals: on their own they reliably indicate real code.
+  //
+  // Each entry demands code-SHAPED context, not merely a keyword. The previous
+  // single regex matched any line that merely STARTED with a bare keyword, and
+  // most of those keywords are also ordinary English words. So every one of
+  // "If you want...", "Return to the menu", "For example...", "Update your
+  // settings", "Do not close the tab", "New in this release", "Class of 2020",
+  // "Select an option", "Print the page", "Import duties", "From there...",
+  // "Using the app..." was classified as code -- and code is exempt from RTL
+  // treatment, so ordinary Persian answers opening with a Latin word silently
+  // lost their styling. It also treated ANY "<word>" in prose as an HTML tag.
+  //
+  // Requiring a following delimiter (a paren, an assignment, a brace, a
+  // terminating semicolon) or a known HTML tag name keeps real code matching
+  // while letting prose through.
+  const CODE_STRONG_PATTERNS = [
+    /(^|\n)[ \t]*#include\b/,
+    /(^|\n)#!/,
+    // A line comment must actually carry content, not be a bare "//".
+    /(^|\n)[ \t]*\/\/[ \t]*\S/,
+    /(^|\n)[ \t]*(const|let|var)\s+[A-Za-z_$][\w$]*\s*[=:]/,
+    /(^|\n)[ \t]*(function|def|fn|func)\s+[A-Za-z_$][\w$]*\s*\(/,
+    /(^|\n)[ \t]*(async\s+)?function\s*\(/,
+    /(^|\n)[ \t]*(class|struct|enum|interface|trait|impl|namespace)\s+[A-Za-z_$][\w$]*[^\n{]{0,40}\{/,
+    /(^|\n)[ \t]*from\s+[\w.]+\s+import\s+/,
+    /(^|\n)[ \t]*import\s+[{*]/,
+    /(^|\n)[ \t]*import\s+[\w{}$,.*\s]+\s+from\s+['"]/,
+    /(^|\n)[ \t]*export\s+(default|const|let|var|function|class|\{)/,
+    /(^|\n)[ \t]*(public|private|protected|static)\s+[\w<>\[\],\s]+\s+[A-Za-z_$][\w$]*\s*\(/,
+    // Control-flow keywords only count with their syntax attached.
+    /(^|\n)[ \t]*(if|for|while|switch|catch|elif|except)\s*\(/,
+    /(^|\n)[ \t]*(else|try|do|finally)\s*\{/,
+    /(^|\n)[ \t]*(elif|else|except|finally|try)\b[^\n]*:[ \t]*(\n|$)/,
+    /(^|\n)[ \t]*return\b[^\n]*;/,
+    /(^|\n)[ \t]*(throw|raise)\s+[A-Za-z_$][\w$]*\s*[({]/,
+    /\brequire\s*\(\s*['"]/,
+    /\b(console\.log|System\.out\.print|printf|println|fmt\.Print)\s*\(/,
+    // Known tag names only, so "<your name here>" in prose is not an element.
+    /<\/(div|span|p|a|ul|ol|li|table|tr|td|th|h[1-6]|section|article|header|footer|nav|script|style|code|pre|em|strong|body|html|head|button|form|label|select|option|textarea)>/i,
+    /<(div|span|p|a|ul|ol|li|table|tr|td|th|h[1-6]|img|br|hr|input|button|form|section|article|header|footer|nav|script|style|code|pre|em|strong|body|html|head|meta|link|label|select|option|textarea)(\s[^<>]*)?\/?>/i,
+    // SQL is matched case-sensitively: lowercase "update ... where" is far more
+    // likely to be an English sentence than a query.
+    /\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[\s\S]{0,120}?\b(FROM|SET|VALUES|WHERE)\b/
+  ];
+
+  function hasStrongCodeSignal(text) {
+    for (const re of CODE_STRONG_PATTERNS) {
+      if (re.test(text)) return true;
+    }
+    return false;
+  }
   // Weak signals: individually common in ordinary prose (a stray semicolon, a
   // parenthetical "{aside}", a single "&&"/"->" used as shorthand), so one
   // occurrence is not proof of code. Require repetition/nesting instead.
@@ -205,7 +266,7 @@
   }
 
   function looksLikeCode(text) {
-    if (CODE_STRONG_RE.test(text)) return true;
+    if (hasStrongCodeSignal(text)) return true;
     if (/\/\*[\s\S]*\*\//.test(text)) return true;
     const semicolons = (text.match(/;/g) || []).length;
     if (semicolons >= 2) return true;
@@ -224,7 +285,10 @@
     '[data-message-author-role="assistant"]',
     '[data-message-author-role="user"]',
     'textarea', 'input[type="text"]', 'input[type="search"]',
-    '[contenteditable="true"]',
+    // Bare `contenteditable` and `contenteditable=""` are both valid and mean
+    // editable; only "false" opts out. Matching the literal `="true"` form
+    // missed composers on any site that writes the shorthand.
+    '[contenteditable]:not([contenteditable="false"])',
     '.markdown', '.prose', '.message-content', '.query-content',
     '.whitespace-pre-wrap', '.response-content-markdown',
     // Gemini renders follow-up suggestion prompts in a bare styled <div>
@@ -251,7 +315,7 @@
     'mat-card-content'
   ].join(',');
 
-  const EDITABLE_SELECTOR = 'textarea, input[type="text"], input[type="search"], [contenteditable="true"]';
+  const EDITABLE_SELECTOR = 'textarea, input[type="text"], input[type="search"], [contenteditable]:not([contenteditable="false"])';
 
   let settings = null;
   let active = false;
@@ -365,6 +429,25 @@
     return el.textContent || '';
   }
 
+  // Assign a field's value through the NATIVE prototype setter.
+  //
+  // React (and Vue, and most controlled-input frameworks) installs its own
+  // `value` property on the element instance and tracks the last value it
+  // wrote. A plain `el.value = x` hits that instance property, so the
+  // framework's tracker still holds the OLD string, concludes nothing changed,
+  // and discards the following input event -- the paste visibly appeared in
+  // the box and then vanished on the next re-render, or was simply never sent.
+  // Going through the prototype setter updates the real DOM value and lets the
+  // tracker observe a genuine change.
+  function setNativeValue(el, value) {
+    const proto = el instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && typeof desc.set === 'function') desc.set.call(el, value);
+    else el.value = value;
+  }
+
   function mark(el, value) {
     if (el.getAttribute('data-hamsoo') !== value) el.setAttribute('data-hamsoo', value);
   }
@@ -462,6 +545,24 @@
   // walker below skips it, and switching fa <-> ar is a silent no-op.
   const originalDigitText = new WeakMap();
 
+  // True when a text node belongs to a nested block that gets classified in
+  // its own right, rather than to `root` directly.
+  //
+  // SELECTOR deliberately includes wrappers (.markdown, .prose, the
+  // data-message-author-role containers), and those are scanned OUTER-first.
+  // Without this guard, localizing digits on an RTL wrapper walked EVERY
+  // descendant text node -- including nested English paragraphs, table cells
+  // and list items that the classifier had judged LTR -- and rewrote their
+  // digits too. An English sentence inside a Persian answer came out reading
+  // "version ۳.۱". Each nested block reaches classify() on its own and decides
+  // for itself, so the wrapper must only touch text it directly owns.
+  function inNestedBlock(node, root) {
+    for (let p = node.parentElement; p && p !== root; p = p.parentElement) {
+      if (p.matches(SELECTOR)) return true;
+    }
+    return false;
+  }
+
   function localizeDigits(el) {
     const script = settings.digitsScript === 'ar' ? 'ar' : 'fa';
     const table = script === 'ar' ? ARABIC_INDIC_DIGITS : PERSIAN_DIGITS;
@@ -475,9 +576,10 @@
         const needsRescript = record !== undefined && record.script !== script;
         if (!needsConvert && !needsRescript) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
-        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable="true"], [href]')) {
+        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [href]')) {
           return NodeFilter.FILTER_REJECT;
         }
+        if (inNestedBlock(node, el)) return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;
       }
     });
@@ -498,15 +600,38 @@
   // Undo localizeDigits: restores every text node under el to its recorded
   // pre-conversion value. Turning the setting off is a one-step, lossless
   // revert instead of requiring a page reload.
-  function restoreDigits(el) {
+  //
+  // `scope` picks between the two callers:
+  //   'block' (default) -- classifier use. Scoped exactly like localizeDigits,
+  //     because a nested block owns its own digits: restoring them from an
+  //     ancestor would undo a nested RTL block's conversion, and the
+  //     text-signature cache would then skip re-classifying it, leaving those
+  //     digits permanently reverted.
+  //   'tree' -- teardown use. cleanTree() must strip every trace of the
+  //     extension from a document or shadow root, so it has to reach nested
+  //     blocks too; scoping it there would leave localized digits behind after
+  //     the user switched Hamsoo off.
+  function restoreDigits(el, scope) {
+    const wholeTree = scope === 'tree';
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!wholeTree && inNestedBlock(node, el)) continue;
       const record = originalDigitText.get(node);
       if (record !== undefined) {
         if (node.nodeValue !== record.text) node.nodeValue = record.text;
         originalDigitText.delete(node);
       }
     }
+  }
+
+  // Digits are only ever localized inside RTL blocks, so every classifier exit
+  // that leaves an element non-RTL has to hand back whatever we converted
+  // earlier. Previously only the RTL branch touched digits at all: a block
+  // that started Persian and was later rewritten by the site (streaming edits,
+  // a re-render, an inline translation) kept its Persian digits forever, even
+  // though the surrounding text was now English and no longer marked RTL.
+  function restoreDigitsIfNeeded(el) {
+    if (!el.matches(EDITABLE_SELECTOR)) restoreDigits(el);
   }
 
   // Remembers the dir attribute an editable carried BEFORE we touched it.
@@ -604,6 +729,7 @@
     } else if (text.trim() && inRTLContext(el)) {
       // LTR-based element inside an RTL ambient context: give it an LTR base so
       // neutral punctuation does not jump to the wrong end of the line.
+      restoreDigitsIfNeeded(el);
       markLTR(el, text);
       if (wasRTL) reclassifyDescendants(el);
     } else if (text.trim() && isMixedBlock(text)) {
@@ -615,9 +741,11 @@
       //
       // Digits are deliberately NOT localized on this path: the block is
       // majority-Latin, so its numbers usually belong to the English text.
+      restoreDigitsIfNeeded(el);
       markLTR(el, text);
       if (wasRTL) reclassifyDescendants(el);
     } else {
+      restoreDigitsIfNeeded(el);
       unmark(el);
       if (wasRTL) reclassifyDescendants(el);
     }
@@ -941,7 +1069,7 @@
 
   // Strip every trace of the extension from a document or shadow root.
   function cleanTree(root) {
-    restoreDigits(root);
+    restoreDigits(root, 'tree');
     for (const el of root.querySelectorAll('[data-hamsoo-dir]')) restoreEditableDir(el);
     for (const el of root.querySelectorAll('[data-hamsoo], [data-hamsoo-box]')) {
       el.removeAttribute('data-hamsoo');
@@ -1070,10 +1198,17 @@
     const clean = text.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
     const start = target.selectionStart != null ? target.selectionStart : target.value.length;
     const end = target.selectionEnd != null ? target.selectionEnd : target.value.length;
-    target.value = target.value.slice(0, start) + clean + target.value.slice(end);
+    setNativeValue(target, target.value.slice(0, start) + clean + target.value.slice(end));
     const pos = start + clean.length;
     try { target.setSelectionRange(pos, pos); } catch (_) { /* no-op */ }
-    target.dispatchEvent(new Event('input', { bubbles: true }));
+    // InputEvent (not a bare Event) with an inputType, so listeners that read
+    // event.inputType -- as React's onChange path and most rich editors do --
+    // recognize this as a real paste rather than ignoring it.
+    target.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertFromPaste',
+      data: clean
+    }));
   }, true);
 
   if (hasAPI) {

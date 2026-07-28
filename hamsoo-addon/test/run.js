@@ -16,6 +16,7 @@ require('./version.test');
 require('./release-notes.test');
 require('./publishable.test');
 require('./parity.test');
+require('./code-detect.test');
 require('./dom.test');
 require('./layout.test');
 require('./direction.test');
