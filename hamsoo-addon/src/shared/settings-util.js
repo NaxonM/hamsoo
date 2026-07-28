@@ -562,6 +562,9 @@
     if (!api || !api.storage || !api.storage.local) return Promise.resolve(false);
     if (opts.bump !== false) incrementSyncVersion(settings);
     return Promise.resolve(api.storage.local.set({ settings: settings })).then(function () {
+      // Per-device facts (usage days, install age) are stripped from the slim
+      // payload anyway, so mirroring them would be a pure round-trip cost.
+      if (opts.localOnly) return true;
       if (!api.storage.sync) return true;
       var slim = getSlimSettingsForSync(settings);
       var bytes = estimateSyncBytes(slim);
@@ -579,6 +582,41 @@
         return true;
       });
     });
+  }
+
+  // Serialized read-modify-write over the stored settings object.
+  //
+  // Every writer previously did its own get -> mutate -> set. Because the get
+  // is async, two writers starting close together both read the SAME snapshot
+  // and the second set overwrote the first writer's field with a stale value.
+  // This is not theoretical: the keyboard toggle, the usage-day recorder, the
+  // selector picker and a language change can all land within the same tick of
+  // a page load, and the loser's change vanished silently.
+  //
+  // Queuing every mutation on one chain makes each mutator observe the result
+  // of the previous one. The mutator receives the freshest stored object and
+  // may either mutate it in place or return a replacement; returning false
+  // means "nothing to do" and skips the write entirely.
+  var writeChain = Promise.resolve();
+
+  function updateStoredSettings(api, mutate, options) {
+    var opts = options || {};
+    function run() {
+      if (!api || !api.storage || !api.storage.local) return Promise.resolve(null);
+      if (typeof mutate !== 'function') return Promise.resolve(null);
+      return Promise.resolve(api.storage.local.get('settings')).then(function (res) {
+        var current = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
+        var result = mutate(current);
+        if (result === false) return null;
+        var next = result && typeof result === 'object' ? result : current;
+        return persistSettings(api, next, opts).then(function () { return next; });
+      });
+    }
+    // Chain off both fulfilment and rejection so one failed write cannot wedge
+    // the queue for the rest of the session.
+    var queued = writeChain.then(run, run);
+    writeChain = queued.then(function () {}, function () {});
+    return queued;
   }
 
   // Match patterns cannot carry a port in the host component, but url.origin
@@ -773,6 +811,7 @@
     mergeCustomSelectors: mergeCustomSelectors,
     mergeSyncedSettings: mergeSyncedSettings,
     persistSettings: persistSettings,
+    updateStoredSettings: updateStoredSettings,
     getLastSyncError: getLastSyncError,
     estimateSyncBytes: estimateSyncBytes,
     SYNC_QUOTA_BYTES_PER_ITEM: SYNC_QUOTA_BYTES_PER_ITEM,

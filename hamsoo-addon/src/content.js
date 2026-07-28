@@ -33,6 +33,10 @@
     'copilot.microsoft.com': 'copilot',
     'aistudio.google.com': 'aistudio',
     'chat.qwen.ai': 'qwen',
+    // Apex as well as www: kimi.com serves the product directly, and the
+    // suffix fallback below only matches SUBdomains of a listed host, so
+    // 'www.kimi.com' could never cover the bare apex.
+    'kimi.com': 'kimi',
     'www.kimi.com': 'kimi',
     'kimi.moonshot.cn': 'kimi',
     'poe.com': 'poe',

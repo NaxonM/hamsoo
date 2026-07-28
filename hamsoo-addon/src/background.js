@@ -148,6 +148,29 @@ async function syncCustomSitesReporting() {
   }
 }
 
+// The background page's single settings write funnel.
+//
+// Wraps the shared serialized read-modify-write helper so no code in this file
+// performs its own get -> mutate -> set. The fallback exists only for the case
+// where settings-util failed to load; it is deliberately NOT a second
+// implementation of the merge, just a last-resort direct write.
+async function writeSettings(mutate, options) {
+  const util = globalThis.HamsooUtil;
+  if (util && typeof util.updateStoredSettings === 'function') {
+    return util.updateStoredSettings(api, mutate, options);
+  }
+  const res = await api.storage.local.get('settings');
+  const settings = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
+  const result = mutate(settings);
+  if (result === false) return null;
+  const next = result && typeof result === 'object' ? result : settings;
+  if (!options || options.bump !== false) {
+    next.syncVersion = (typeof next.syncVersion === 'number' ? next.syncVersion : 0) + 1;
+  }
+  await api.storage.local.set({ settings: next });
+  return next;
+}
+
 // Bring persisted settings up to the current schema once per install/startup.
 async function migrateStoredSettings() {
   const util = globalThis.HamsooUtil;
@@ -222,17 +245,23 @@ if (api && api.storage && api.storage.onChanged) {
 async function openWelcomePage() {
   const util = globalThis.HamsooUtil;
   try {
-    const res = await api.storage.local.get('settings');
-    const settings = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
     const current = (util && util.WELCOME_VERSION) || 1;
-    const seen = util && typeof util.normalizeOnboardedVersion === 'function'
-      ? util.normalizeOnboardedVersion(settings.onboardedVersion)
-      : (typeof settings.onboardedVersion === 'number' ? settings.onboardedVersion : 0);
-    // A reinstall on top of an existing profile keeps its settings, and that
-    // user has already been toured.
-    if (seen >= current) return;
-    settings.onboardedVersion = current;
-    await api.storage.local.set({ settings });
+    // The marker write and the decision to open must come from the SAME
+    // serialized snapshot. Read-then-write across an await let a concurrent
+    // write land in between, so the marker could be written against a stale
+    // object -- losing whatever the other writer had just saved.
+    let shouldOpen = false;
+    await writeSettings(settings => {
+      const seen = util && typeof util.normalizeOnboardedVersion === 'function'
+        ? util.normalizeOnboardedVersion(settings.onboardedVersion)
+        : (typeof settings.onboardedVersion === 'number' ? settings.onboardedVersion : 0);
+      // A reinstall on top of an existing profile keeps its settings, and that
+      // user has already been toured.
+      if (seen >= current) return false;
+      settings.onboardedVersion = current;
+      shouldOpen = true;
+    });
+    if (!shouldOpen) return;
     if (api.tabs && api.tabs.create) {
       await api.tabs.create({ url: api.runtime.getURL('welcome.html'), active: true });
     }
@@ -295,20 +324,13 @@ async function toggleEnabled() {
   if (now - (await readStoredToggle()) < TOGGLE_DEDUPE_MS) return;
   await writeStoredToggle(now);
   try {
-    const res = await api.storage.local.get('settings');
-    const settings = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
-    // Mirror the "!== false" default used elsewhere so a missing value (treated
-    // as on) toggles to off.
-    settings.enabled = settings.enabled === false;
-    // Route through the shared funnel so the toggle bumps syncVersion and
-    // reaches storage.sync; otherwise the next pull silently reverts it.
-    const util = globalThis.HamsooUtil;
-    if (util && typeof util.persistSettings === 'function') {
-      await util.persistSettings(api, settings);
-    } else {
-      settings.syncVersion = (typeof settings.syncVersion === 'number' ? settings.syncVersion : 0) + 1;
-      await api.storage.local.set({ settings });
-    }
+    // Serialized so a toggle racing a usage-day write or a language change
+    // cannot be silently overwritten by whichever read started first.
+    await writeSettings(settings => {
+      // Mirror the "!== false" default used elsewhere so a missing value
+      // (treated as on) toggles to off.
+      settings.enabled = settings.enabled === false;
+    });
   } catch (_) {
     // Storage unavailable; nothing to toggle.
   }
@@ -325,15 +347,14 @@ async function recordUsageDay() {
   const util = globalThis.HamsooUtil;
   if (!util || typeof util.recordUsageDay !== 'function') return;
   try {
-    const res = await api.storage.local.get('settings');
-    // No stored settings yet means a fresh install that has not been through
-    // migration; the install listener owns seeding, not this path.
-    if (!res || !res.settings || typeof res.settings !== 'object') return;
-    const settings = res.settings;
-    const result = util.recordUsageDay(settings.support, Date.now());
-    if (!result || !result.changed) return;
-    settings.support = result.support;
-    await api.storage.local.set({ settings });
+    await writeSettings(settings => {
+      // No stored settings yet means a fresh install that has not been through
+      // migration; the install listener owns seeding, not this path.
+      if (!settings || !Object.keys(settings).length) return false;
+      const result = util.recordUsageDay(settings.support, Date.now());
+      if (!result || !result.changed) return false;
+      settings.support = result.support;
+    }, { bump: false, localOnly: true });
   } catch (_) {
     // Storage unavailable; a missed usage day only delays the ask.
   }
@@ -502,17 +523,17 @@ function startElementPicker(texts) {
     if (!selector) return;
     (async () => {
       try {
-        const res = await ext.storage.local.get('settings');
-        const settings = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
-        const map = settings.customSelectors && typeof settings.customSelectors === 'object'
-          ? settings.customSelectors
-          : {};
-        const key = location.hostname;
-        const list = Array.isArray(map[key]) ? map[key] : [];
-        if (!list.includes(selector)) list.push(selector);
-        map[key] = list.slice(-20);
-        settings.customSelectors = map;
-        await ext.storage.local.set({ settings });
+        // This picker is injected into the PAGE, where the shared settings
+        // helper does not exist. Writing storage directly from here bypassed
+        // the syncVersion bump and the storage.sync mirror, so a picked
+        // selector stayed on one device and was reverted by the next pull.
+        // Hand the write to the background instead, which owns the funnel.
+        const reply = await ext.runtime.sendMessage({
+          type: 'HAMSOO_ADD_SELECTOR',
+          host: location.hostname,
+          selector
+        });
+        if (!reply || reply.ok !== true) throw new Error('write rejected');
         toast(((texts && texts.saved) || '') + ' \u2014 ' + selector);
       } catch (_) {
         toast((texts && texts.failed) || '');
@@ -579,6 +600,36 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return undefined;
   }
 
+  // Selector picks arrive from the injected page picker, which cannot reach
+  // the shared settings helper. The merge lives here so picks go through the
+  // same funnel as every other write.
+  if (msg.type === 'HAMSOO_ADD_SELECTOR') {
+    (async () => {
+      try {
+        const host = typeof msg.host === 'string' ? msg.host : '';
+        const selector = typeof msg.selector === 'string' ? msg.selector : '';
+        if (!host || !selector) {
+          sendResponse({ ok: false, error: 'missing host or selector' });
+          return;
+        }
+        await writeSettings(settings => {
+          const map = settings.customSelectors && typeof settings.customSelectors === 'object'
+            ? settings.customSelectors
+            : {};
+          const list = Array.isArray(map[host]) ? map[host].slice() : [];
+          if (list.includes(selector)) return false;
+          list.push(selector);
+          map[host] = list.slice(-20);
+          settings.customSelectors = map;
+        });
+        sendResponse({ ok: true });
+      } catch (error) {
+        sendResponse({ ok: false, error: String(error) });
+      }
+    })();
+    return true;
+  }
+
   // The welcome tour offers a language switch, because it opens on install --
   // when 'auto' has usually resolved to English for a Persian-speaking user on
   // an English-language browser. It routes the change through here instead of
@@ -592,20 +643,10 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           sendResponse({ ok: false, error: 'unsupported language' });
           return;
         }
-        const res = await api.storage.local.get('settings');
-        const settings = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
-        if (settings.lang === lang) {
-          sendResponse({ ok: true });
-          return;
-        }
-        settings.lang = lang;
-        const util = globalThis.HamsooUtil;
-        if (util && typeof util.persistSettings === 'function') {
-          await util.persistSettings(api, settings);
-        } else {
-          settings.syncVersion = (typeof settings.syncVersion === 'number' ? settings.syncVersion : 0) + 1;
-          await api.storage.local.set({ settings });
-        }
+        await writeSettings(settings => {
+          if (settings.lang === lang) return false;
+          settings.lang = lang;
+        });
         sendResponse({ ok: true });
       } catch (error) {
         sendResponse({ ok: false, error: String(error) });

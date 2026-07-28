@@ -36,6 +36,48 @@ test('both manifests target the same content-script hosts', () => {
   assert.equal(JSON.stringify(a), JSON.stringify(b), 'content-script matches differ');
 });
 
+// The host list exists in three places -- the manifest, content.js and
+// popup.js -- and they drifted: kimi.com had no apex entry anywhere and the
+// manifest never registered www variants, so the extension simply did not run
+// on those URLs. These guards fail the build if the three lists disagree.
+function siteHostsFrom(file) {
+  const src = fs.readFileSync(path.join(ROOT, 'src', file), 'utf8');
+  const block = src.match(/SITE_HOSTS = \{([\s\S]*?)\n\s*\};/);
+  assert.ok(block, 'could not locate SITE_HOSTS in ' + file);
+  const out = {};
+  for (const line of block[1].split('\n')) {
+    if (/^\s*\/\//.test(line)) continue;
+    const kv = line.match(/'([^']+)':\s*'([^']+)'/);
+    if (kv) out[kv[1]] = kv[2];
+  }
+  return out;
+}
+
+test('content.js and popup.js agree on the site host map', () => {
+  const a = siteHostsFrom('content.js');
+  const b = siteHostsFrom('popup.js');
+  assert.equal(JSON.stringify(a), JSON.stringify(b), 'SITE_HOSTS drifted between content.js and popup.js');
+  assert.equal(a['kimi.com'], 'kimi', 'the bare kimi.com apex must resolve');
+});
+
+test('every host in SITE_HOSTS has a content-script match pattern', () => {
+  // Suffix matching in the resolver only covers SUBdomains of a listed host,
+  // so a host that is absent from the manifest is never injected at all.
+  const hosts = siteHostsFrom('content.js');
+  const matches = manifest('hamsoo-chromium').content_scripts[0].matches;
+  for (const host of Object.keys(hosts)) {
+    assert.includes(matches, 'https://' + host + '/*', 'no match pattern registers ' + host);
+  }
+});
+
+test('apex and www are both registered for the bare-domain products', () => {
+  const matches = manifest('hamsoo-chromium').content_scripts[0].matches;
+  for (const host of ['chatgpt.com', 'claude.ai', 'grok.com', 'poe.com', 'kimi.com', 'perplexity.ai']) {
+    assert.includes(matches, 'https://' + host + '/*', 'missing apex for ' + host);
+    assert.includes(matches, 'https://www.' + host + '/*', 'missing www for ' + host);
+  }
+});
+
 test('both variants load settings-util before content.js', () => {
   for (const name of ['hamsoo-chromium', 'hamsoo-firefox']) {
     const js = manifest(name).content_scripts[0].js;
