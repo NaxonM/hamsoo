@@ -87,8 +87,16 @@
   const RTL_LETTER_CLASS = '[\\u0590-\\u05FF\\u0600-\\u065F\\u066A-\\u06EF\\u06FA-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]';
   const RTL_RE = new RegExp(RTL_LETTER_CLASS);
   const RTL_RE_G = new RegExp(RTL_LETTER_CLASS, 'g');
-  const LATIN_LETTER_RE = /[A-Za-z]/;
-  const LATIN_LETTER_RE_G = /[A-Za-z]/g;
+  // Latin letters INCLUDING accented forms. A bare [A-Za-z] treated every
+  // accented character as neutral, so a line opening with an accented word
+  // ('Ecole', 'Uber', 'Etes-vous' with their real diacritics) had no Latin
+  // first-strong character at all: the first strong letter found was the
+  // Persian further along, and the whole line flipped to RTL. The ratio count
+  // was wrong for the same reason. Latin-1 Supplement plus Latin Extended-A/B,
+  // minus the two multiplication/division signs that sit inside those ranges.
+  const LATIN_LETTER_CLASS = '[A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F]';
+  const LATIN_LETTER_RE = new RegExp(LATIN_LETTER_CLASS);
+  const LATIN_LETTER_RE_G = new RegExp(LATIN_LETTER_CLASS, 'g');
 
   // How much of an element's lettered content needs to be RTL before a block
   // whose FIRST strong character is Latin is still treated as RTL. This is the
@@ -1022,7 +1030,11 @@
   async function ensureFont(key) {
     if (key === loadedFontKey) return;
     const seq = ++fontLoadSeq;
-    dropLoadedFont();
+    // The previous face is deliberately NOT dropped here. Dropping it up front
+    // left the page with no webfont for the entire duration of the load -- a
+    // visible flash back to the site's own font on every switch -- and if the
+    // new face then failed to load or was superseded, the user was left with
+    // nothing at all. Swap only once the replacement is actually ready.
 
     if (key.startsWith(CUSTOM_PREFIX)) {
       if (!hasAPI) return;
@@ -1038,6 +1050,7 @@
       const face = new FontFace(customFamily(id), bytes.buffer);
       try { await face.load(); } catch (_) { return; }
       if (seq !== fontLoadSeq) return; // superseded while loading
+      dropLoadedFont();
       document.fonts.add(face);
       loadedFace = face;
       loadedFontKey = key;
@@ -1046,7 +1059,8 @@
 
     const spec = BUILTIN_FONT_FILES[key];
     if (!spec) {
-      loadedFontKey = key; // system font (Tahoma), nothing to load
+      dropLoadedFont(); // system font (Tahoma): release the previous webfont
+      loadedFontKey = key;
       return;
     }
     if (!hasAPI) return;
@@ -1054,6 +1068,7 @@
     const face = new FontFace(key, 'url("' + url + '") format("' + spec.format + '")', { weight: spec.weight });
     try { await face.load(); } catch (_) { return; }
     if (seq !== fontLoadSeq) return; // superseded while loading
+    dropLoadedFont();
     document.fonts.add(face);
     loadedFace = face;
     loadedFontKey = key;
@@ -1075,6 +1090,22 @@
   function cleanTree(root) {
     restoreDigits(root, 'tree');
     for (const el of root.querySelectorAll('[data-hamsoo-dir]')) restoreEditableDir(el);
+    // "Fix this selection" writes inline !important direction styles straight
+    // onto the page. They used to be permanent: nothing recorded them, so
+    // disabling the extension or reloading settings left the page rewritten
+    // with no way back short of a reload. The marker attribute lets teardown
+    // undo exactly what was applied, and nothing else.
+    for (const el of root.querySelectorAll('[data-hamsoo-fix]')) {
+      el.style.removeProperty('direction');
+      el.style.removeProperty('text-align');
+      el.style.removeProperty('unicode-bidi');
+      // Only strip dir= if the fix added it; if the site had its own value the
+      // marker carries it, because the fix overwrote it with dir="rtl".
+      const fix = el.getAttribute('data-hamsoo-fix');
+      if (fix === 'dir') el.removeAttribute('dir');
+      else if (fix && fix.startsWith('keep:')) el.setAttribute('dir', fix.slice(5));
+      el.removeAttribute('data-hamsoo-fix');
+    }
     for (const el of root.querySelectorAll('[data-hamsoo], [data-hamsoo-box]')) {
       el.removeAttribute('data-hamsoo');
       el.removeAttribute('data-hamsoo-box');

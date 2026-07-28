@@ -60,8 +60,52 @@
     return true;
   });
 
+  // B24: "Fix this selection" (context menu) writes inline !important
+  // direction styles straight onto page elements. Nothing recorded them, so
+  // they survived a disable and could only be cleared by reloading the page.
+  // Reproduce exactly what the injected fixSelection() applies, including the
+  // marker that tells teardown what it owns.
+  const fixAdded = document.createElement('p');
+  fixAdded.id = 'fixAdded';
+  fixAdded.textContent = 'Hello world';
+  const fixKept = document.createElement('p');
+  fixKept.id = 'fixKept';
+  fixKept.textContent = 'Hello world';
+  fixKept.setAttribute('dir', 'ltr'); // the SITE's own attribute
+  document.body.appendChild(fixAdded);
+  document.body.appendChild(fixKept);
+  for (const el of [fixAdded, fixKept]) {
+    const priorDir = el.getAttribute('dir');
+    el.setAttribute('data-hamsoo-fix', priorDir === null ? 'dir' : 'keep:' + priorDir);
+    el.setAttribute('dir', 'rtl');
+    el.style.setProperty('direction', 'rtl', 'important');
+    el.style.setProperty('text-align', 'start', 'important');
+    el.style.setProperty('unicode-bidi', 'isolate', 'important');
+  }
+
   window.__push(withOverride({ enabled: false }));
   await wait(700);
+
+  check('disabling undoes a context-menu selection fix', () => {
+    const el = document.getElementById('fixAdded');
+    if (el.hasAttribute('data-hamsoo-fix')) throw new Error('marker attribute left behind');
+    if (el.hasAttribute('dir')) throw new Error('dir="rtl" left behind');
+    const left = ['direction', 'text-align', 'unicode-bidi']
+      .filter(p => el.style.getPropertyValue(p));
+    if (left.length) throw new Error('inline styles left: ' + left.join(', '));
+    return true;
+  });
+
+  check('undoing a selection fix keeps the page\u2019s own dir attribute', () => {
+    // Cleanup must remove only what the fix added. Stripping a dir= the site
+    // itself set would break the page in the opposite direction.
+    const el = document.getElementById('fixKept');
+    if (el.getAttribute('dir') !== 'ltr') {
+      throw new Error('author dir="ltr" came back as ' + JSON.stringify(el.getAttribute('dir')));
+    }
+    if (el.hasAttribute('data-hamsoo-fix')) throw new Error('marker attribute left behind');
+    return true;
+  });
 
   check('disabling removes every data-hamsoo attribute from <html>', () => {
     const left = hamsooAttrs();
