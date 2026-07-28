@@ -42,18 +42,23 @@
     {
       "matches": [
         "https://chatgpt.com/*",
+        "https://www.chatgpt.com/*",
         "https://claude.ai/*",
+        "https://www.claude.ai/*",
         "https://gemini.google.com/*",
         "https://chat.deepseek.com/*",
         "https://grok.com/*",
+        "https://www.grok.com/*",
         "https://www.perplexity.ai/*",
         "https://perplexity.ai/*",
         "https://copilot.microsoft.com/*",
         "https://aistudio.google.com/*",
         "https://chat.qwen.ai/*",
+        "https://kimi.com/*",
         "https://www.kimi.com/*",
         "https://kimi.moonshot.cn/*",
         "https://poe.com/*",
+        "https://www.poe.com/*",
         "https://notebooklm.google.com/*"
       ],
       "css": [

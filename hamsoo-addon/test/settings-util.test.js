@@ -441,6 +441,108 @@ test('persistSettings refuses to mirror a payload over the sync item quota', asy
   assert.equal(seen[0].kind, 'quota');
 });
 
+/* ---------- Phase 3: the serialized write funnel ---------- */
+
+const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+// Storage that actually takes time to read and write, which is what makes the
+// lost-update race reproducible. A synchronous fake would pass either way.
+function slowStorage(initial) {
+  const box = { settings: JSON.parse(JSON.stringify(initial)) };
+  return {
+    box,
+    api: {
+      storage: {
+        local: {
+          get: async () => { await tick(); return JSON.parse(JSON.stringify(box)); },
+          set: async obj => { await tick(); box.settings = JSON.parse(JSON.stringify(obj.settings)); }
+        }
+      }
+    }
+  };
+}
+
+test('updateStoredSettings serializes concurrent writes instead of losing one', async () => {
+  // Two writers touching DIFFERENT fields, started in the same tick. With a
+  // plain get -> mutate -> set both read the same snapshot and the second set
+  // erased the first one's field.
+  const { api, box } = slowStorage({ syncVersion: 0 });
+  await Promise.all([
+    util.updateStoredSettings(api, s => { s.enabled = false; }),
+    util.updateStoredSettings(api, s => { s.lang = 'fa'; })
+  ]);
+  assert.equal(box.settings.enabled, false, 'the first writer survived');
+  assert.equal(box.settings.lang, 'fa', 'the second writer survived');
+  assert.equal(box.settings.syncVersion, 2, 'both writes bumped the counter');
+});
+
+test('updateStoredSettings mutators observe the previous write', async () => {
+  const { api, box } = slowStorage({ syncVersion: 0, count: 0 });
+  await Promise.all([
+    util.updateStoredSettings(api, s => { s.count += 1; }),
+    util.updateStoredSettings(api, s => { s.count += 1; }),
+    util.updateStoredSettings(api, s => { s.count += 1; })
+  ]);
+  assert.equal(box.settings.count, 3, 'no increment was lost to a stale read');
+});
+
+test('updateStoredSettings skips the write when the mutator declines', async () => {
+  let writes = 0;
+  const box = { settings: { lang: 'fa', syncVersion: 3 } };
+  const api = {
+    storage: {
+      local: {
+        get: async () => JSON.parse(JSON.stringify(box)),
+        set: async obj => { writes += 1; box.settings = obj.settings; }
+      }
+    }
+  };
+  const res = await util.updateStoredSettings(api, s => (s.lang === 'fa' ? false : undefined));
+  assert.equal(res, null, 'a declined mutation resolves null');
+  assert.equal(writes, 0, 'no write was issued');
+  assert.equal(box.settings.syncVersion, 3, 'the counter was not bumped');
+});
+
+test('a failed write does not wedge the queue for later writers', async () => {
+  let calls = 0;
+  const box = { settings: {} };
+  const api = {
+    storage: {
+      local: {
+        get: async () => JSON.parse(JSON.stringify(box)),
+        set: async obj => {
+          calls += 1;
+          if (calls === 1) throw new Error('disk full');
+          box.settings = obj.settings;
+        }
+      }
+    }
+  };
+  let failed = false;
+  try {
+    await util.updateStoredSettings(api, s => { s.enabled = true; });
+  } catch (_) { failed = true; }
+  assert.equal(failed, true, 'the failing write rejects');
+  await util.updateStoredSettings(api, s => { s.lang = 'en'; });
+  assert.equal(box.settings.lang, 'en', 'a later write still goes through');
+});
+
+test('persistSettings localOnly writes local without mirroring to sync', async () => {
+  // Usage days and install age are per-device and stripped from the slim
+  // payload, so mirroring them is a pure round-trip cost.
+  let wrote = false;
+  let mirrored = false;
+  const api = {
+    storage: {
+      local: { set: async () => { wrote = true; } },
+      sync: { set: async () => { mirrored = true; } }
+    }
+  };
+  await util.persistSettings(api, { support: { usageDays: ['2026-07-29'] } }, { localOnly: true, bump: false });
+  assert.equal(wrote, true, 'the local write still happens');
+  assert.equal(mirrored, false, 'per-device data is not mirrored to sync');
+});
+
 /* ---------- Phase 2: feedback ask ---------- */
 
 // A profile that satisfies every condition, so each test can break exactly one.

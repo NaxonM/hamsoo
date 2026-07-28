@@ -35,6 +35,9 @@ const SITE_HOSTS = {
   'copilot.microsoft.com': 'copilot',
   'aistudio.google.com': 'aistudio',
   'chat.qwen.ai': 'qwen',
+  // Apex as well as www: the suffix fallback only matches SUBdomains of a
+  // listed host, so 'www.kimi.com' could never cover the bare apex.
+  'kimi.com': 'kimi',
   'www.kimi.com': 'kimi',
   'kimi.moonshot.cn': 'kimi',
   'poe.com': 'poe',
