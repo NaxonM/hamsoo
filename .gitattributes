@@ -1,0 +1,17 @@
+# Keep diffs reviewable. The v1.2.0 fix pass rewrote several source files to
+# CRLF, turning ~100 lines of real edits into a ~4,300-line diff -- which is
+# how a three-line popup-layout regression slipped through review.
+# See docs/DEBUGGING-REPORT.md (Regression R2).
+* text=auto eol=lf
+
+*.js   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.woff2 binary
+*.zip   binary

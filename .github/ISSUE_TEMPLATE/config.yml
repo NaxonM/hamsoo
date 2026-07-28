@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report by email (no GitHub account needed)
+    url: mailto:hamsoo@bellamor.ir
+    about: Send the same report by email if you would rather not open an issue.
+  - name: Ask a question or suggest an idea
+    url: https://github.com/NaxonM/hamsoo/discussions
+    about: For anything that is not a bug in how a page is rendered.

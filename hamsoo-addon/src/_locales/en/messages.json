@@ -1,0 +1,29 @@
+{
+  "extName": {
+    "message": "Hamsoo — RTL for AI chat"
+  },
+  "extDesc": {
+    "message": "Smart RTL for Persian text on 12 AI chat sites — custom fonts, readability controls, and add any other site."
+  },
+  "cmdToggle": {
+    "message": "Turn Hamsoo on or off"
+  },
+  "actionTitle": {
+    "message": "Hamsoo settings"
+  },
+  "menuFixSelection": {
+    "message": "Fix direction of selected text (Hamsoo)"
+  },
+  "menuPickElement": {
+    "message": "Always fix an element on this site… (Hamsoo)"
+  },
+  "pickerHint": {
+    "message": "Click the element Hamsoo should always fix here — press Esc to cancel"
+  },
+  "pickerSaved": {
+    "message": "Saved — Hamsoo will now always fix this element on this site"
+  },
+  "pickerFailed": {
+    "message": "Could not save the picked element"
+  }
+}

@@ -1,0 +1,5 @@
+# Most ignore rules live in the repository-root .gitignore. Only add-on-specific
+# artefacts belong here.
+
+# UI preview screenshots (npm run preview)
+preview-shots/

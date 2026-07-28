@@ -1,0 +1,88 @@
+<!doctype html>
+<html dir="rtl" lang="fa" data-accent="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="welcomeDocTitle">هم‌سو نصب شد</title>
+  <script src="lang-init.js"></script>
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <div class="page">
+    <!-- Language first, above everything. This page opens on install, before the
+         user has had any chance to choose, and 'auto' resolves from the browser's
+         UI language -- which for most of this audience is English even when
+         Persian is wanted. Same four options as the popup, same dictionary keys. -->
+    <div class="topbar">
+      <span class="topbar-label" data-i18n="langTitle">زبان</span>
+      <div class="seg" id="welcomeLangSeg" role="radiogroup" data-i18n-attr="aria-label:langTitle">
+        <button type="button" role="radio" data-lang="auto" data-i18n="langAuto">خودکار</button>
+        <button type="button" role="radio" data-lang="fa" data-i18n="langFa">فارسی</button>
+        <button type="button" role="radio" data-lang="en" data-i18n="langEn">English</button>
+        <button type="button" role="radio" data-lang="ar" data-i18n="langAr">العربية</button>
+      </div>
+    </div>
+
+    <header class="hero">
+      <img class="hero-icon" src="icons/icon-128.png" width="64" height="64" alt="">
+      <h1 data-i18n="welcomeTitle">هم‌سو نصب شد</h1>
+      <p class="lead" data-i18n="welcomeLead">از این پس متن فارسی در سایت‌های هوش مصنوعی راست‌چین و خوانا نمایش داده می‌شود. یک دقیقه وقت بگذارید تا بدانید هر کلید چه می‌کند.</p>
+      <figure class="hero-figure">
+        <img src="welcome-hero.webp" width="900" height="506" alt="" data-i18n-attr="alt:welcomeHeroAlt">
+        <figcaption data-i18n="welcomeHeroCaption">پیش و پس از هم‌سو، روی یک گفت‌وگوی واقعی.</figcaption>
+      </figure>
+    </header>
+
+    <section class="card">
+      <h2 data-i18n="welcomePinTitle">آیکون را سنجاق کنید</h2>
+      <p data-i18n="welcomePinBody">در نوار ابزان مرورگر روی آیکون افزونه‌ها بزنید و هم‌سو را سنجاق کنید. رنگی بودن آیکون یعنی هم‌سو در آن صفحه فعال است.</p>
+      <p class="hint"><span data-i18n="welcomeShortcutBody">روشن و خاموش کردن سریع با این کلیدها:</span> <kbd dir="ltr">Alt+Shift+R</kbd></p>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="welcomeDemoTitle">همین‌جا امتحان کنید</h2>
+      <p class="hint" data-i18n="welcomeDemoHint">کلیدها را بزنید و تفاوت را در متن نمونه ببینید. متن پایین دقیقاً همان حالتی است که بدون هم‌سو می‌بینید.</p>
+      <div class="demo">
+        <div class="demo-controls">
+          <label class="demo-switch"><input type="checkbox" id="demoDir"><span data-i18n="welcomeDemoDir">راست‌چین</span></label>
+          <label class="demo-switch"><input type="checkbox" id="demoFont"><span data-i18n="fontTitle">فونت</span></label>
+          <label class="demo-switch"><input type="checkbox" id="demoRead"><span data-i18n="readTitle">خوانایی</span></label>
+          <label class="demo-switch"><input type="checkbox" id="demoDigits"><span data-i18n="digitsTitle">ارقام محلی</span></label>
+        </div>
+        <p class="demo-sample" id="demoSample" data-i18n="welcomeSample">مدل GPT-4 در سال 2024 معرفی شد و دقتش حدود 15% بهتر از نسخهٔ قبلی است. (نتیجه: تفاوت را می‌شود دید!)</p>
+      </div>
+      <p class="hint demo-note" data-i18n="welcomeDemoNote">این بخش فقط یک نمونهٔ نمایشی است: تنظیمات شما را تغییر نمی‌دهد و چیزی ذخیره نمی‌کند.</p>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="welcomeControlsTitle">هر کلید چه می‌کند</h2>
+      <dl class="controls">
+        <div><dt data-i18n="sitesTitle">سایت‌ها</dt><dd data-i18n="welcomeSitesBody">فهرست سایت‌هایی که هم‌سو در آن‌ها کار می‌کند. می‌توانید هر کدام را خاموش کنید یا سایت دلخواه خودتان را اضافه کنید.</dd></div>
+        <div><dt data-i18n="welcomeScopeTitle">فقط همین سایت</dt><dd data-i18n="welcomeScopeBody">تنظیمات را تنها برای سایتی که باز است تغییر می‌دهد؛ بقیهٔ سایت‌ها دست‌نخورده می‌مانند.</dd></div>
+        <div><dt data-i18n="fontTitle">فونت</dt><dd data-i18n="fontHint"></dd></div>
+        <div><dt data-i18n="readTitle">خوانایی</dt><dd data-i18n="readHint"></dd></div>
+        <div><dt data-i18n="digitsTitle">ارقام محلی</dt><dd data-i18n="digitsHint"></dd></div>
+        <div><dt data-i18n="punctTitle">اصلاح نشانه‌گذاری</dt><dd data-i18n="punctHint"></dd></div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="welcomeNextTitle">قدم بعدی</h2>
+      <div class="actions">
+        <button class="btn primary" id="openSettingsBtn" type="button" data-i18n="welcomeOpenSettings">تنظیمات را باز کن</button>
+        <button class="btn" id="reportBugBtn" type="button" data-i18n="welcomeReportBug">گزارش اشکال</button>
+        <a class="btn" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener noreferrer" data-i18n="welcomeStar">ستاره در گیت‌هاب</a>
+      </div>
+      <p class="hint" data-i18n="welcomePrivacy">هم‌سو هیچ داده‌ای جایی نمی‌فرستد. همه‌چیز روی همین دستگاه می‌ماند.</p>
+    </section>
+
+    <footer class="page-footer">
+      <a class="made-with" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener noreferrer" data-i18n="madeWith">ساخته‌شده با ❤️ توسط NaxonM</a>
+    </footer>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>

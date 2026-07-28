@@ -1,0 +1,18 @@
+{
+  "name": "hamsoo-repo",
+  "private": true,
+  "description": "Repository wrapper. The extension, and the version that ships, live in hamsoo-addon/.",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "npm --prefix hamsoo-addon run check",
+    "lint": "npm --prefix hamsoo-addon run lint",
+    "test": "npm --prefix hamsoo-addon test",
+    "build": "npm --prefix hamsoo-addon run build",
+    "verify": "npm --prefix hamsoo-addon run verify",
+    "preview": "npm --prefix hamsoo-addon run preview",
+    "zip": "npm --prefix hamsoo-addon run zip"
+  }
+}

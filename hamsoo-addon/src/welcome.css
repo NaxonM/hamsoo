@@ -1,0 +1,305 @@
+/* Welcome tour. Standalone page styles -- popup.css is scoped to the 380px
+   popup shell, so sharing it would drag in layout rules that fight a full page.
+   The palette and accent tokens deliberately mirror popup.css so the tour does
+   not look like a different product. */
+
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('fonts/Vazirmatn.woff2') format('woff2');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --canvas: #F4F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #F0F1F3;
+  --border: rgba(0, 0, 0, 0.09);
+  --text: #1F2225;
+  --text-2: #5A6068;
+  --accent: #2783DE;
+  --on-accent: #FFFFFF;
+  --radius: 12px;
+}
+
+html[data-accent="teal"] { --accent: #128577; }
+html[data-accent="violet"] { --accent: #7C4FC4; }
+html[data-accent="amber"] { --accent: #B36A26; }
+
+html.dark {
+  --canvas: #141619;
+  --surface: #191C1F;
+  --surface-2: #22262A;
+  --border: rgba(255, 255, 255, 0.11);
+  --text: #E8EAED;
+  --text-2: #A2A9B0;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: 'Vazirmatn', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.85;
+}
+
+.page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 20px 56px;
+}
+
+/* ---------- Hero ---------- */
+
+.hero { text-align: center; }
+.hero-icon { display: block; margin: 0 auto 12px; }
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.lead {
+  margin: 0 auto;
+  max-width: 52ch;
+  color: var(--text-2);
+}
+
+.hero-figure { margin: 24px 0 0; }
+
+.hero-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.hero-figure figcaption {
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* ---------- Cards ---------- */
+
+.card {
+  margin-top: 20px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.card p { margin: 0 0 8px; }
+.card p:last-child { margin-bottom: 0; }
+
+.hint {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 7px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  unicode-bidi: isolate;
+}
+
+/* ---------- Live demo ---------- */
+
+.demo {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.demo-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.demo-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.demo-switch input { accent-color: var(--accent); cursor: pointer; }
+
+/* The sample starts in the state Hamsoo exists to fix: a Persian paragraph
+   forced left-to-right in the browser's default Latin font. Each demo toggle
+   adds exactly one class, so the user sees which control did what. */
+.demo-sample {
+  margin: 0;
+  padding: 16px 18px;
+  background: var(--surface);
+  direction: ltr;
+  text-align: left;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  /* No transition on font-size/line-height. An eased restyle looked pleasant but
+     made the two properties unobservable to the headless DOM tests (the virtual
+     time clock never advances a CSS transition, so getComputedStyle reports the
+     start value forever), and the demo reads perfectly well as an instant flip. */
+}
+
+.demo-sample.is-rtl {
+  direction: rtl;
+  text-align: start;
+}
+
+.demo-sample.is-font { font-family: 'Vazirmatn', sans-serif; }
+
+.demo-sample.is-read {
+  font-size: 17px;
+  line-height: 1.95;
+  max-width: 62ch;
+}
+
+.demo-note { margin-top: 10px; }
+
+/* ---------- Control reference ---------- */
+
+.controls {
+  margin: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.controls dt {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.controls dd {
+  margin: 2px 0 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* ---------- Actions ---------- */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.btn {
+  flex: 1 1 auto;
+  padding: 9px 14px;
+  min-width: 140px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover { border-color: var(--accent); }
+
+.btn.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
+/* ---------- Footer ---------- */
+
+.page-footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.made-with {
+  color: var(--text-2);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.made-with:hover { color: var(--accent); }
+
+/* Latin UI languages keep the prose left-aligned, but the sample paragraph
+   keeps its own direction so the demo still demonstrates something. */
+html[dir="ltr"] .hint,
+html[dir="ltr"] .controls dd { text-align: left; }
+
+@media (max-width: 520px) {
+  .page { padding: 24px 14px 40px; }
+  .btn { flex-basis: 100%; }
+}
+
+/* ---------- Language switch ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* Mirrors popup.css's .seg rather than sharing it: popup.css is scoped to the
+   372px shell, so importing it would drag that layout onto a full-width page. */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.seg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 3px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.seg button:hover { color: var(--text); }
+
+.seg button[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hamsoo-addon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Static checks (syntax, JSON, i18n parity, lint)
+        run: node scripts/check.js
+      - name: Build both variants
+        run: node build.js
+      - name: Tests
+        run: node test/run.js
+      - name: Package
+        run: npm run zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hamsoo-extensions
+          path: |
+            hamsoo-addon/dist/hamsoo-chromium.zip
+            hamsoo-addon/dist/hamsoo-firefox.zip
