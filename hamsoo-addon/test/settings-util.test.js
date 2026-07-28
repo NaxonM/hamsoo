@@ -350,12 +350,95 @@ test('support survives a full slim sync round-trip', () => {
   assert.equal(merged.support.askCount, 1);
 });
 
-test('mergeSyncedSettings takes the lower onboardedVersion', () => {
-  // A device that has never shown the tour must still be able to.
+test('mergeSyncedSettings keeps the higher onboardedVersion', () => {
+  // Seen on any device counts as seen. Taking the LOWER value (the original
+  // behavior) meant a slim or freshly installed remote copy -- where the field
+  // is 0 or missing entirely -- dragged a fully onboarded device back to 0 on
+  // every pull, permanently corrupting the marker. Tour auto-open is
+  // install-only, so nothing re-shows the tour; the state just went wrong.
   const merged = util.mergeSyncedSettings({ onboardedVersion: 0 }, { onboardedVersion: 1 });
-  assert.equal(merged.onboardedVersion, 0);
+  assert.equal(merged.onboardedVersion, 1);
   const both = util.mergeSyncedSettings({ onboardedVersion: 1 }, { onboardedVersion: 1 });
   assert.equal(both.onboardedVersion, 1);
+  // The regression case: an onboarded device pulling a slim remote copy.
+  const slimRemote = util.mergeSyncedSettings({ onboardedVersion: 1 }, {});
+  assert.equal(slimRemote.onboardedVersion, 1, 'a remote copy without the field must not reset it');
+  const zeroRemote = util.mergeSyncedSettings({ onboardedVersion: 1 }, { onboardedVersion: 0 });
+  assert.equal(zeroRemote.onboardedVersion, 1, 'a fresh remote install must not reset it');
+});
+
+test('mergeSyncedSettings unions customSelectors instead of overwriting', () => {
+  // An empty remote map used to erase every pick another device had made,
+  // because the plain key-by-key overwrite treated {} as an authoritative value.
+  const wiped = util.mergeSyncedSettings(
+    { customSelectors: { 'a.com': ['div.x'] } },
+    { customSelectors: {} }
+  );
+  assert.equal(JSON.stringify(wiped.customSelectors), JSON.stringify({ 'a.com': ['div.x'] }),
+    'empty remote must not wipe local picks');
+
+  const unioned = util.mergeSyncedSettings(
+    { customSelectors: { 'a.com': ['div.x'], 'b.com': ['p.y'] } },
+    { customSelectors: { 'a.com': ['div.x', 'span.z'] } }
+  );
+  assert.equal(JSON.stringify(unioned.customSelectors['a.com']), JSON.stringify(['div.x', 'span.z']),
+    'per-host lists union and dedupe');
+  assert.equal(JSON.stringify(unioned.customSelectors['b.com']), JSON.stringify(['p.y']),
+    'hosts absent from remote survive');
+});
+
+test('isValidMatchPattern rejects registry-wide wildcards', () => {
+  // A crafted import could otherwise request host permissions over a whole TLD.
+  assert.equal(util.isValidMatchPattern('https://*.com/*'), false, 'bare TLD wildcard');
+  assert.equal(util.isValidMatchPattern('https://*.co.uk/*'), false, 'multi-label registry wildcard');
+  assert.equal(util.isValidMatchPattern('https://*.example.com/*'), true, 'a real site wildcard still works');
+  assert.equal(util.isValidMatchPattern('https://chatgpt.com/*'), true, 'plain hosts unaffected');
+  assert.equal(util.sanitizeMatchPatterns(['https://*.com/*', 'https://ok.com/*']).length, 1);
+});
+
+test('normalizeDigitsScript is case-insensitive', () => {
+  // A hand-edited backup carrying 'AR' silently ran Persian digits.
+  assert.equal(util.normalizeDigitsScript('AR'), 'ar');
+  assert.equal(util.normalizeDigitsScript(' Ar '), 'ar');
+  assert.equal(util.normalizeDigitsScript('fa'), 'fa');
+  assert.equal(util.normalizeDigitsScript(undefined), 'fa');
+});
+
+test('persistSettings surfaces sync failures instead of swallowing them', async () => {
+  // The local write is still authoritative, so the call resolves true -- but a
+  // rejected or over-quota sync mirror must be reported, not reported as success.
+  const seen = [];
+  const api = {
+    storage: {
+      local: { set: async () => {} },
+      sync: { set: async () => { throw new Error('QUOTA_BYTES_PER_ITEM quota exceeded'); } }
+    }
+  };
+  const ok = await util.persistSettings(api, { enabled: true }, { onSyncError: e => seen.push(e) });
+  assert.equal(ok, true, 'a sync failure does not fail the local save');
+  assert.equal(seen.length, 1, 'the failure is reported');
+  assert.equal(seen[0].kind, 'write');
+  assert.ok(util.getLastSyncError(), 'the failure is recorded for the UI');
+});
+
+test('persistSettings refuses to mirror a payload over the sync item quota', async () => {
+  const seen = [];
+  let mirrored = false;
+  const api = {
+    storage: {
+      local: { set: async () => {} },
+      sync: { set: async () => { mirrored = true; } }
+    }
+  };
+  const fat = { enabled: true, customSelectors: {} };
+  for (let i = 0; i < 120; i += 1) {
+    fat.customSelectors['example-site-' + i + '.com'] =
+      ['div.message-bubble-container.prose-wrapper-' + i, 'article.chat-turn__body--assistant-' + i];
+  }
+  assert.ok(util.estimateSyncBytes(fat) > util.SYNC_QUOTA_BYTES_PER_ITEM, 'probe payload exceeds the quota');
+  await util.persistSettings(api, fat, { onSyncError: e => seen.push(e) });
+  assert.equal(mirrored, false, 'an over-quota payload is not sent');
+  assert.equal(seen[0].kind, 'quota');
 });
 
 /* ---------- Phase 2: feedback ask ---------- */
