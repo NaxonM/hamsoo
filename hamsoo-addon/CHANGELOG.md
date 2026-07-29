@@ -4,42 +4,9 @@ This file is written for people who use Hamsoo. It is also the source of the rel
 GitHub and the "what's new" text in the store listings, so it describes what changed for you,
 not how it was built.
 
-## [Unreleased]
+## [1.3.0] - 2026-07-30
 
-Not released yet. Three chat sites where Persian text was left with the site's own Latin
-styling, and the font and readability controls on one of them.
-
-### Highlights
-
-- Persian text in Qwen answers is styled again, instead of being left alone.
-- Kimi answers are styled whether they are entirely Persian or mix Persian and English.
-- The font, size, line height and weight controls now reach the text of Kimi answers, where they previously looked like they did nothing.
-- A line that mixes Persian and English on Perplexity now gets Persian typography, while the English around it still reads from the left.
-
-### Fixed
-
-- **Qwen answers kept the site's own font and spacing.** Qwen wraps every paragraph of an
-  answer in a container Hamsoo did not know to look at, so Persian text inside those
-  answers was never styled, no matter which controls were switched on.
-- **Kimi answers were only styled when the whole answer was Persian.** Kimi wraps its
-  paragraphs the same way. An answer written entirely in Persian still looked correct,
-  because the block around it was recognized as Persian as a whole, but an answer that
-  moved between Persian and English was left untouched, which is why the problem looked
-  intermittent rather than constant.
-- **The font and readability controls had no visible effect on Kimi.** Kimi applies its own
-  font, size and line height directly to the text of every answer, which stopped your
-  settings from reaching it. Kimi now receives the same deeper styling that Google
-  NotebookLM already used, so size, line height, weight and the Persian font all apply.
-  This also covers lines that mix Persian and English, not only fully Persian ones.
-- **A mixed Persian and English line on Perplexity was skipped.** A line with a short
-  Persian phrase inside a longer English sentence has too little Persian to count as a
-  Persian line, so it was passed over entirely. Such a line now receives the Persian font
-  and spacing while keeping its English direction, so the English opening stays on the left
-  and nothing is reversed.
-
-## [1.3.0] - 2026-07-27
-
-Getting started and getting help, plus a large pass over text direction, syncing between
+Getting started and getting help, support for Qwen, Kimi, and Perplexity typography, plus a large pass over text direction, syncing between
 devices, and turning Hamsoo off cleanly.
 
 **There is no 1.2.x release.** The version was skipped, so 1.3.0 follows directly from
@@ -47,14 +14,11 @@ devices, and turning Hamsoo off cleanly.
 
 ### Highlights
 
-- A welcome tour that opens once, when you install Hamsoo, with a live demo of every control.
-- A help view in the popup: what to try when a site looks wrong, and bug reporting in one click by GitHub issue or by email.
-- Persian text inside a mostly-English line no longer renders backwards.
-- Turning Hamsoo off now completely undoes everything it changed, with no page reload.
-- Syncing settings between devices no longer deletes your custom fonts.
-- The interface now follows your timezone: Persian by default in Iran, even when the browser itself is in English.
-- The welcome tour has its own language switch, so a first-run page in the wrong language can be fixed on the spot.
-- An occasional feedback card, shown only after you have really used Hamsoo. Two asks at most, ever.
+- Persian typography support for Qwen, Kimi, and Perplexity answers.
+- Welcome tour with a live demo of every control for new installs.
+- Help view in the popup with one-click bug reporting.
+- Improved text direction: mixed Persian and English lines no longer render backwards.
+- Clean toggle teardown and reliable settings sync across devices.
 
 ### Added
 
@@ -77,6 +41,10 @@ devices, and turning Hamsoo off cleanly.
 
 #### Direction and text
 
+- **Qwen answers kept the site's own font and spacing.** Qwen wraps every paragraph of an answer in a container Hamsoo did not know to look at, so Persian text inside those answers was never styled, no matter which controls were switched on.
+- **Kimi answers were only styled when the whole answer was Persian.** Kimi wraps its paragraphs the same way. An answer written entirely in Persian still looked correct, because the block around it was recognized as Persian as a whole, but an answer that moved between Persian and English was left untouched, which is why the problem looked intermittent rather than constant.
+- **The font and readability controls had no visible effect on Kimi.** Kimi applies its own font, size and line height directly to the text of every answer, which stopped your settings from reaching it. Kimi now receives the same deeper styling that Google NotebookLM already used, so size, line height, weight and the Persian font all apply. This also covers lines that mix Persian and English, not only fully Persian ones.
+- **A mixed Persian and English line on Perplexity was skipped.** A line with a short Persian phrase inside a longer English sentence has too little Persian to count as a Persian line, so it was passed over entirely. Such a line now receives the Persian font and spacing while keeping its English direction, so the English opening stays on the left and nothing is reversed.
 - A Persian line that opens with an English or German word — a term followed by its Persian meaning, for example — no longer jumps to the left edge while the rest of the answer stays on the right. A line that ends in Persian now follows the text around it, and sentences that really are English keep their left-to-right flow.
 - Persian text inside a mostly-English line was rendered **backwards** (for example "در تعطیلات" appearing as "رد تالیطعت"). Mixed lines now keep their English left-to-right flow while the Persian words inside them read right-to-left. Code blocks containing a Persian phrase were affected the same way and are also fixed.
 - English-only bullets inside a Persian list were right-aligned with their final period thrown to the left end.
