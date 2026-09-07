@@ -57,7 +57,7 @@ AI chat platforms often struggle with Persian and right-to-left (RTL) text — d
 * **Instant Toggle**: Enable/disable Hamsoo cleanly without page reloads (restores original DOM state immediately).
 * **Keyboard Shortcut**: `Alt+Shift+R` (customizable in browser settings).
 * **Custom Sites & Element Picker**: Enable Hamsoo on any non-standard website or right-click specific DOM elements to fix target containers.
-* **Cross-Device Sync & Backups**: Sync settings with your browser profile and export/import configuration files.
+* **Backups**: Export and import a settings file, including custom fonts.
 * **Multi-Language UI**: Full Persian, English, and Arabic interface support with dark mode.
 
 ---
@@ -177,7 +177,8 @@ npm run preview       # Generate UI screenshots
 * `hamsoo-addon/scripts/`: Build, packaging, and validation utilities.
 * `hamsoo-addon/website/`: Project landing page.
 * `assets/`: Documentation assets.
-* `docs/DEBUGGING-REPORT.md`: Regression ledger and architectural notes.
+* `docs/HANDOVER.md` / `docs/GROUND-TRUTH.md`: Current open work (H01–H15).
+* `docs/DEBUGGING-REPORT.md`: Historical R1–R6 regression ledger.
 
 ---
 

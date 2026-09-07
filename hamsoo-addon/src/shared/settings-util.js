@@ -48,11 +48,6 @@
   // window is dead weight, so the list is capped.
   var SUPPORT_USAGE_DAYS_CAP = 10;
 
-  // Support fields that must never travel to another device. Engagement is
-  // earned per device and installedAt is a per-device fact -- syncing either
-  // would let a long-standing install make a fresh one look eligible.
-  var SUPPORT_LOCAL_ONLY_FIELDS = ['installedAt', 'usageDays'];
-
   var USAGE_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
   // Local calendar day, deliberately not UTC: a "usage day" should line up with
@@ -310,7 +305,7 @@
   // was introduced at 1; earlier payloads count as version 0. The background
   // script runs this once per install/startup, so the popup and content
   // scripts can trust the stored shape without re-running migrations.
-  var SCHEMA_VERSION = 3;
+  var SCHEMA_VERSION = 4;
   // `now` is injectable purely so the v3 leg is testable without freezing time.
   function migrateSettings(raw, now) {
     var input = raw && typeof raw === 'object' ? raw : {};
@@ -354,10 +349,8 @@
       }
     }
     if (from < 2) {
-      // v1 -> v2: add syncVersion (monotonic counter used for cross-device
-      // conflict resolution in storage.sync; whichever copy has the higher
-      // value is treated as the authoritative source).
-      if (typeof out.syncVersion !== 'number') out.syncVersion = 0;
+      // v1 -> v2 used to introduce syncVersion for storage.sync conflict
+      // resolution. Cross-device sync was removed; the counter is stripped in v4.
     }
     if (from < 3) {
       // v2 -> v3: onboarding marker + feedback-ask bookkeeping.
@@ -377,210 +370,196 @@
       out.onboardedVersion = normalizeOnboardedVersion(out.onboardedVersion);
       out.support = normalizeSupport(out.support, now);
     }
+    if (from < 4) {
+      // v3 -> v4: drop the storage.sync conflict counter and any font entries
+      // that only existed as metadata from another device (no local bytes).
+      delete out.syncVersion;
+      if (Array.isArray(out.customFonts)) {
+        var kept = [];
+        var fi, font, fontCopy, fk;
+        for (fi = 0; fi < out.customFonts.length; fi += 1) {
+          font = out.customFonts[fi];
+          if (!font || typeof font !== 'object' || font.remoteOnly === true) continue;
+          if (Object.prototype.hasOwnProperty.call(font, 'remoteOnly')) {
+            fontCopy = {};
+            for (fk in font) {
+              if (Object.prototype.hasOwnProperty.call(font, fk) && fk !== 'remoteOnly') fontCopy[fk] = font[fk];
+            }
+            kept.push(fontCopy);
+          } else {
+            kept.push(font);
+          }
+        }
+        out.customFonts = kept;
+      }
+    }
     out.schemaVersion = SCHEMA_VERSION;
     return { settings: out, changed: true };
   }
 
-  // Increments the syncVersion field in-place and returns the new value.
-  // Called by popup.js before every user-initiated save so the background
-  // service worker can resolve sync conflicts by comparing version numbers.
-  function incrementSyncVersion(settings) {
-    var current = typeof settings.syncVersion === 'number' ? settings.syncVersion : 0;
-    settings.syncVersion = current + 1;
-    return settings.syncVersion;
+  function cloneJson(value) {
+    try { return JSON.parse(JSON.stringify(value)); } catch (_) { return value; }
   }
 
-  // Returns a slim copy of settings suitable for storage.sync (trims heavy font byte arrays).
-  // `remoteOnly` is a per-device availability flag, never a synced fact -- it
-  // must not travel to other devices, where the font may well be present.
-  function getSlimSettingsForSync(settings) {
-    if (!settings || typeof settings !== 'object') return {};
-    var copy = JSON.parse(JSON.stringify(settings));
-    if (Array.isArray(copy.customFonts)) {
-      copy.customFonts = copy.customFonts.map(function(f) {
-        return { id: f.id, name: f.name };
-      });
-    }
-    // Only the shareable half of `support` travels. "Don't ask me again" is a
-    // decision about Hamsoo and should hold on every device; how long this
-    // device has been installed, and which days it was used, are local facts.
-    if (copy.support && typeof copy.support === 'object') {
-      for (var i = 0; i < SUPPORT_LOCAL_ONLY_FIELDS.length; i += 1) {
-        delete copy.support[SUPPORT_LOCAL_ONLY_FIELDS[i]];
-      }
-    }
-    return copy;
+  function sameJson(a, b) {
+    if (a === b) return true;
+    try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
   }
 
-  // A newer remote copy carries only the shareable half of `support`, so a plain
-  // object overwrite would wipe this device's earned engagement. Local facts are
-  // kept; the permanent opt-out is a union, because "never show it again" must
-  // be honored everywhere; askCount and snoozeUntil take the max so dismissing
-  // on two devices can never add up to more asks than the cap allows.
-  function mergeSupport(localSupport, remoteSupport) {
-    var local = localSupport && typeof localSupport === 'object' ? localSupport : {};
-    var remote = remoteSupport && typeof remoteSupport === 'object' ? remoteSupport : {};
-    var out = normalizeSupport(local);
-    if (remote.dismissedForever === true) out.dismissedForever = true;
-    var remoteAsks = Math.floor(Number(remote.askCount) || 0);
-    if (remoteAsks > out.askCount) out.askCount = Math.min(SUPPORT_MAX_ASKS, remoteAsks);
-    var remoteSnooze = clampTimestamp(remote.snoozeUntil);
-    if (remoteSnooze > out.snoozeUntil) out.snoozeUntil = remoteSnooze;
-    // Earliest non-zero acted-at wins: it records when the user first said yes.
-    var remoteActed = clampTimestamp(remote.actedAt);
-    if (remoteActed > 0 && (out.actedAt === 0 || remoteActed < out.actedAt)) out.actedAt = remoteActed;
-    if (out.actedAt > 0) out.dismissedForever = true;
-    return out;
-  }
-
-  // Union custom fonts by id, preferring the local entry. A storage.sync
-  // round-trip only carries { id, name }, so without this the slim remote copy
-  // would wipe format/size/added and drop fonts that exist only on this device.
-  //
-  // Font *bytes* never sync (they live in IndexedDB and would blow the sync
-  // quota). A remote-only id therefore names a font this device cannot render:
-  // selecting it silently leaves the previous font in place. Mark those entries
-  // `remoteOnly` so the fonts UI can show them as unavailable-on-this-device
-  // instead of offering them as ordinary choices.
-  function mergeCustomFonts(localFonts, remoteFonts) {
-    var local = Array.isArray(localFonts) ? localFonts : [];
-    var remote = Array.isArray(remoteFonts) ? remoteFonts : [];
-    var out = [];
-    var seen = {};
-    var i, f, copy, key;
-    for (i = 0; i < local.length; i += 1) {
-      f = local[i];
-      if (!f || typeof f.id !== 'string') continue;
-      seen[f.id] = true;
-      // A local entry has real bytes behind it; clear any stale remoteOnly
-      // flag from a previous merge so a re-uploaded font becomes usable again.
-      if (f.remoteOnly) {
-        copy = {};
-        for (key in f) {
-          if (Object.prototype.hasOwnProperty.call(f, key) && key !== 'remoteOnly') copy[key] = f[key];
-        }
-        out.push(copy);
-      } else {
-        out.push(f);
-      }
-    }
-    for (i = 0; i < remote.length; i += 1) {
-      f = remote[i];
-      if (!f || typeof f.id !== 'string' || seen[f.id]) continue;
-      seen[f.id] = true;
-      copy = {};
-      for (key in f) {
-        if (Object.prototype.hasOwnProperty.call(f, key)) copy[key] = f[key];
-      }
-      copy.remoteOnly = true;
-      out.push(copy);
-    }
-    return out;
-  }
-
-  // Merge a newer remote copy over the local one without letting the slimmed
-  // sync payload destroy local-only data.
-  function mergeSyncedSettings(local, remote) {
-    var base = local && typeof local === 'object' ? local : {};
-    var incoming = remote && typeof remote === 'object' ? remote : {};
-    var merged = {};
+  // Compare the UI's in-memory object to the last acknowledged storage copy
+  // and return only the keys the UI actually changed.
+  function diffSettingsFields(acked, local) {
+    var fields = {};
+    if (!local || typeof local !== 'object') return fields;
+    acked = acked && typeof acked === 'object' ? acked : {};
     var key;
-    for (key in base) {
-      if (Object.prototype.hasOwnProperty.call(base, key)) merged[key] = base[key];
+    for (key in local) {
+      if (!Object.prototype.hasOwnProperty.call(local, key)) continue;
+      if (key === 'syncVersion') continue;
+      if (!sameJson(local[key], acked[key])) fields[key] = cloneJson(local[key]);
     }
-    for (key in incoming) {
-      if (Object.prototype.hasOwnProperty.call(incoming, key)) merged[key] = incoming[key];
-    }
-    merged.customFonts = mergeCustomFonts(base.customFonts, incoming.customFonts);
-    merged.support = mergeSupport(base.support, incoming.support);
-    // Seen on any device counts as seen. Math.min let a slim or fresh remote
-    // copy (onboardedVersion 0, or the field missing entirely) drag a fully
-    // onboarded device back to 0, corrupting the marker on every pull.
-    merged.onboardedVersion = Math.max(
-      normalizeOnboardedVersion(base.onboardedVersion),
-      normalizeOnboardedVersion(incoming.onboardedVersion)
-    );
-    // Picked selectors are per-host additive facts, not a single value to
-    // overwrite. A plain remote overwrite meant a device publishing an empty
-    // map ({}) erased every pick another device had made.
-    merged.customSelectors = mergeCustomSelectors(base.customSelectors, incoming.customSelectors);
-    return merged;
+    return fields;
   }
 
-  // Union of per-host selector lists. Empty/missing on either side contributes
-  // nothing rather than clearing the other side.
-  function mergeCustomSelectors(localMap, remoteMap) {
-    var a = localMap && typeof localMap === 'object' ? localMap : {};
-    var b = remoteMap && typeof remoteMap === 'object' ? remoteMap : {};
-    var out = {};
-    var host;
-    for (host in a) {
-      if (!Object.prototype.hasOwnProperty.call(a, host)) continue;
-      if (Array.isArray(a[host]) && a[host].length) out[host] = a[host].slice();
-    }
-    for (host in b) {
-      if (!Object.prototype.hasOwnProperty.call(b, host)) continue;
-      if (!Array.isArray(b[host]) || !b[host].length) continue;
-      var list = Array.isArray(out[host]) ? out[host] : [];
-      for (var i = 0; i < b[host].length; i += 1) {
-        if (list.indexOf(b[host][i]) === -1) list.push(b[host][i]);
+  // Keep unacked local edits when storage changes under the UI (popup debounce
+  // vs a background write). Incoming wins for every field the UI has not edited.
+  function rebasePendingSettings(acked, local, incoming) {
+    var result = {};
+    var src = incoming && typeof incoming === 'object' ? incoming : {};
+    var key;
+    for (key in src) {
+      if (Object.prototype.hasOwnProperty.call(src, key) && key !== 'syncVersion') {
+        result[key] = cloneJson(src[key]);
       }
-      out[host] = list.slice(-20);
     }
-    return out;
+    if (!local || typeof local !== 'object') return result;
+    acked = acked && typeof acked === 'object' ? acked : {};
+    for (key in local) {
+      if (!Object.prototype.hasOwnProperty.call(local, key)) continue;
+      if (key === 'syncVersion') continue;
+      if (!sameJson(local[key], acked[key])) result[key] = cloneJson(local[key]);
+    }
+    return result;
   }
 
-  // Chrome's per-item sync ceiling. A realistic power-user payload (many custom
-  // sites, picked selectors, per-site overrides) blows past this, and the old
-  // code turned the rejection into a silent success.
-  var SYNC_QUOTA_BYTES_PER_ITEM = 8192;
-
-  function estimateSyncBytes(slim) {
-    try {
-      var json = JSON.stringify({ settings: slim });
-      if (typeof Blob === 'function') return new Blob([json]).size;
-      if (typeof TextEncoder === 'function') return new TextEncoder().encode(json).length;
-      return json.length;
-    } catch (_) { return 0; }
+  // Apply a narrow mutation onto a fresh stored object. Popup/fonts must send
+  // one of these patches through the background instead of writing a full
+  // in-memory snapshot.
+  function applySettingsPatch(settings, patch) {
+    if (!settings || typeof settings !== 'object' || !patch || typeof patch !== 'object') {
+      return settings;
+    }
+    delete settings.syncVersion;
+    var key;
+    if (patch.replace && typeof patch.replace === 'object') {
+      for (key in settings) {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) delete settings[key];
+      }
+      for (key in patch.replace) {
+        if (Object.prototype.hasOwnProperty.call(patch.replace, key) && key !== 'syncVersion') {
+          settings[key] = patch.replace[key];
+        }
+      }
+      return settings;
+    }
+    if (patch.fields && typeof patch.fields === 'object') {
+      for (key in patch.fields) {
+        if (!Object.prototype.hasOwnProperty.call(patch.fields, key)) continue;
+        if (key === 'syncVersion') continue;
+        settings[key] = patch.fields[key];
+      }
+    }
+    if (patch.addFont && typeof patch.addFont === 'object') {
+      var font = patch.addFont;
+      if (typeof font.id === 'string' && font.id) {
+        if (!Array.isArray(settings.customFonts)) settings.customFonts = [];
+        var exists = false;
+        var i;
+        for (i = 0; i < settings.customFonts.length; i += 1) {
+          if (settings.customFonts[i] && settings.customFonts[i].id === font.id) {
+            exists = true;
+            break;
+          }
+        }
+        if (!exists && settings.customFonts.length < MAX_CUSTOM_FONTS) {
+          settings.customFonts.push({
+            id: font.id,
+            name: typeof font.name === 'string' && font.name ? font.name : font.id,
+            format: typeof font.format === 'string' ? font.format : 'woff2',
+            size: typeof font.size === 'number' ? font.size : 0
+          });
+        }
+      }
+    }
+    if (typeof patch.removeFont === 'string' && patch.removeFont) {
+      var rid = patch.removeFont;
+      var prefix = 'custom:' + rid;
+      if (Array.isArray(settings.customFonts)) {
+        settings.customFonts = settings.customFonts.filter(function (f) {
+          return !f || f.id !== rid;
+        });
+      }
+      if (settings.font === prefix) settings.font = 'Vazirmatn';
+      if (settings.siteOverrides && typeof settings.siteOverrides === 'object') {
+        var okey;
+        for (okey in settings.siteOverrides) {
+          if (!Object.prototype.hasOwnProperty.call(settings.siteOverrides, okey)) continue;
+          var ov = settings.siteOverrides[okey];
+          if (ov && ov.font === prefix) delete ov.font;
+        }
+      }
+    }
+    return settings;
   }
 
-  // Last sync failure, readable by any UI that wants to tell the user their
-  // devices have stopped agreeing. Null means the last mirror attempt succeeded.
-  var lastSyncError = null;
-  function getLastSyncError() { return lastSyncError; }
+  var EXPORT_FORMAT = 'hamsoo-settings';
+  var SUPPORTED_EXPORT_VERSION = 1;
 
-  // Single persistence funnel. Bumps the conflict-resolution counter, writes
-  // the full copy to storage.local, and mirrors a slim copy to storage.sync.
-  // Every writer (popup, fonts page, background toggle) goes through this so
-  // the version counter and the two storage areas cannot diverge.
+  function looksLikeHamsooSettings(obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+    if (typeof obj.schemaVersion === 'number' && isFinite(obj.schemaVersion)) return true;
+    if (typeof obj.font === 'string' && obj.sites && typeof obj.sites === 'object' && !Array.isArray(obj.sites)) return true;
+    if (typeof obj.enabled === 'boolean' && Array.isArray(obj.customSites)) return true;
+    return false;
+  }
+
+  // Reject garbage JSON before any import side effect. Envelope backups
+  // from exportSettings() are preferred; a legacy raw settings object is
+  // accepted only when it carries distinctive Hamsoo fields.
+  function recognizeImportedSettings(data) {
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      return { ok: false, error: 'invalid' };
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'format') || Object.prototype.hasOwnProperty.call(data, 'version')) {
+      if (data.format !== EXPORT_FORMAT) return { ok: false, error: 'invalid' };
+      if (typeof data.version !== 'number' || data.version !== SUPPORTED_EXPORT_VERSION) {
+        return { ok: false, error: 'unsupportedVersion' };
+      }
+      if (!data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+        return { ok: false, error: 'invalid' };
+      }
+      return {
+        ok: true,
+        settings: data.settings,
+        fonts: Array.isArray(data.fonts) ? data.fonts : [],
+        envelope: true
+      };
+    }
+    if (!looksLikeHamsooSettings(data)) return { ok: false, error: 'invalid' };
+    return { ok: true, settings: data, fonts: [], envelope: false };
+  }
+
+  // Local-only write of a complete settings object. Background code should
+  // prefer updateStoredSettings / applySettingsPatch. Popup and fonts must not
+  // call this with a UI snapshot — that clobbers concurrent edits.
   //
-  // The local write is the source of truth, so a sync failure still resolves
-  // true -- but it is now recorded and reported through opts.onSyncError
-  // instead of being swallowed.
-  function persistSettings(api, settings, options) {
-    var opts = options || {};
+  // `options` is accepted for call-site compatibility (older bump/localOnly/
+  // onSyncError flags) and ignored: there is no cloud mirror.
+  function persistSettings(api, settings, _options) {
     if (!api || !api.storage || !api.storage.local) return Promise.resolve(false);
-    if (opts.bump !== false) incrementSyncVersion(settings);
+    if (settings && typeof settings === 'object') delete settings.syncVersion;
     return Promise.resolve(api.storage.local.set({ settings: settings })).then(function () {
-      // Per-device facts (usage days, install age) are stripped from the slim
-      // payload anyway, so mirroring them would be a pure round-trip cost.
-      if (opts.localOnly) return true;
-      if (!api.storage.sync) return true;
-      var slim = getSlimSettingsForSync(settings);
-      var bytes = estimateSyncBytes(slim);
-      if (bytes > SYNC_QUOTA_BYTES_PER_ITEM) {
-        lastSyncError = { kind: 'quota', bytes: bytes, limit: SYNC_QUOTA_BYTES_PER_ITEM };
-        if (typeof opts.onSyncError === 'function') opts.onSyncError(lastSyncError);
-        return true;
-      }
-      return Promise.resolve(api.storage.sync.set({ settings: slim })).then(function () {
-        lastSyncError = null;
-        return true;
-      }, function (err) {
-        lastSyncError = { kind: 'write', message: String((err && err.message) || err || 'sync write failed') };
-        if (typeof opts.onSyncError === 'function') opts.onSyncError(lastSyncError);
-        return true;
-      });
+      return true;
     });
   }
 
@@ -669,6 +648,32 @@
       if (out.indexOf(input[i]) === -1) out.push(input[i]);
     }
     return out;
+  }
+
+  // Does this page URL still match a registered custom-site pattern? Used by
+  // the content script so removing a site tears Hamsoo down in the open tab
+  // immediately, not only on the next navigation.
+  function urlMatchesPattern(rawUrl, pattern) {
+    if (!isValidMatchPattern(pattern)) return false;
+    var u;
+    try { u = new URL(rawUrl); } catch (_) { return false; }
+    var proto = pattern.indexOf('https://') === 0 ? 'https:' : 'http:';
+    if (u.protocol !== proto) return false;
+    var host = pattern.replace(/^https?:\/\//, '').replace(/\/\*$/, '').toLowerCase();
+    var hostname = String(u.hostname || '').toLowerCase();
+    if (host.indexOf('*.') === 0) {
+      var rest = host.slice(2);
+      return hostname === rest || hostname.length > rest.length + 1 && hostname.slice(-(rest.length + 1)) === '.' + rest;
+    }
+    return hostname === host;
+  }
+
+  function urlMatchesCustomSites(rawUrl, patterns) {
+    var list = Array.isArray(patterns) ? patterns : [];
+    for (var i = 0; i < list.length; i += 1) {
+      if (urlMatchesPattern(rawUrl, list[i])) return true;
+    }
+    return false;
   }
 
   // The manifest's suggested_key. When the recorded shortcut equals this
@@ -762,6 +767,22 @@
   // enforce different caps.
   var MAX_CUSTOM_FONTS = 12;
   var MAX_FONT_BYTES = 4 * 1024 * 1024;
+  var MAX_IMPORT_BYTES = MAX_CUSTOM_FONTS * MAX_FONT_BYTES + 1024 * 1024;
+
+  // Extension-only checks accept a renamed .txt. Sniff the sfnt/WOFF magic
+  // so an undecodable file cannot be installed.
+  function sniffFontFormat(bytes) {
+    if (!bytes || bytes.byteLength < 4) return '';
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes.buffer || bytes);
+    if (u8.length < 4) return '';
+    var tag = String.fromCharCode(u8[0], u8[1], u8[2], u8[3]);
+    if (tag === 'wOF2') return 'woff2';
+    if (tag === 'wOFF') return 'woff';
+    if (tag === 'OTTO') return 'otf';
+    if (tag === 'true' || tag === 'ttcf') return 'ttf';
+    if (u8[0] === 0 && u8[1] === 1 && u8[2] === 0 && u8[3] === 0) return 'ttf';
+    return '';
+  }
 
   return {
     clampSize: clampSize,
@@ -779,13 +800,11 @@
     SUPPORT_MAX_ASKS: SUPPORT_MAX_ASKS,
     SUPPORT_SNOOZE_DAYS: SUPPORT_SNOOZE_DAYS,
     SUPPORT_USAGE_DAYS_CAP: SUPPORT_USAGE_DAYS_CAP,
-    SUPPORT_LOCAL_ONLY_FIELDS: SUPPORT_LOCAL_ONLY_FIELDS,
     dayKey: dayKey,
     clampTimestamp: clampTimestamp,
     defaultSupport: defaultSupport,
     normalizeSupport: normalizeSupport,
     normalizeOnboardedVersion: normalizeOnboardedVersion,
-    mergeSupport: mergeSupport,
     recordUsageDay: recordUsageDay,
     supportAskDecision: supportAskDecision,
     shouldAskForSupport: shouldAskForSupport,
@@ -805,21 +824,23 @@
     SUPPORT_REPO_URL: SUPPORT_REPO_URL,
     SUPPORT_ISSUE_URL: SUPPORT_ISSUE_URL,
     migrateSettings: migrateSettings,
-    incrementSyncVersion: incrementSyncVersion,
-    getSlimSettingsForSync: getSlimSettingsForSync,
-    mergeCustomFonts: mergeCustomFonts,
-    mergeCustomSelectors: mergeCustomSelectors,
-    mergeSyncedSettings: mergeSyncedSettings,
     persistSettings: persistSettings,
     updateStoredSettings: updateStoredSettings,
-    getLastSyncError: getLastSyncError,
-    estimateSyncBytes: estimateSyncBytes,
-    SYNC_QUOTA_BYTES_PER_ITEM: SYNC_QUOTA_BYTES_PER_ITEM,
+    applySettingsPatch: applySettingsPatch,
+    diffSettingsFields: diffSettingsFields,
+    rebasePendingSettings: rebasePendingSettings,
+    recognizeImportedSettings: recognizeImportedSettings,
+    EXPORT_FORMAT: EXPORT_FORMAT,
+    SUPPORTED_EXPORT_VERSION: SUPPORTED_EXPORT_VERSION,
     patternFromUrl: patternFromUrl,
     isValidMatchPattern: isValidMatchPattern,
     sanitizeMatchPatterns: sanitizeMatchPatterns,
+    urlMatchesPattern: urlMatchesPattern,
+    urlMatchesCustomSites: urlMatchesCustomSites,
     MAX_CUSTOM_FONTS: MAX_CUSTOM_FONTS,
     MAX_FONT_BYTES: MAX_FONT_BYTES,
+    MAX_IMPORT_BYTES: MAX_IMPORT_BYTES,
+    sniffFontFormat: sniffFontFormat,
     MANIFEST_DEFAULT_SHORTCUT: MANIFEST_DEFAULT_SHORTCUT,
     ARROW_KEY_MAP: ARROW_KEY_MAP,
     toBrowserCommandString: toBrowserCommandString,

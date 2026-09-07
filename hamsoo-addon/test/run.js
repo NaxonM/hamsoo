@@ -10,6 +10,16 @@ execFileSync(process.execPath, [path.join(__dirname, '..', 'build.js')], { stdio
 console.log('\nrunning tests:');
 require('./i18n.test');
 require('./settings-util.test');
+require('./settings-patch.test');
+require('./settings-import.test');
+require('./custom-sites.test');
+require('./selection-fix.test');
+require('./picked-unstyle.test');
+require('./fonts-validate.test');
+require('./fonts-a11y.test');
+require('./aria-i18n.test');
+require('./shadow-measure.test');
+require('./bare-text-bidi.test');
 require('./locales.test');
 require('./manifest.test');
 require('./version.test');

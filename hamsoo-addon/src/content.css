@@ -34,6 +34,15 @@ html[data-hamsoo-on] [data-hamsoo="ltr-mixed"] {
   unicode-bidi: isolate !important;
 }
 
+/* Bare English runs inside RTL blocks. Needs unicode-bidi: isolate
+   so trailing colons and periods stay glued to the English phrase instead
+   of jumping across margins under the container's RTL base direction. */
+html[data-hamsoo-on] [data-hamsoo-run="ltr"] {
+  direction: ltr !important;
+  text-align: start !important;
+  unicode-bidi: isolate !important;
+}
+
 /* Container promotion: tables and lists whose items are all RTL get their
    column order / bullet side flipped as a whole. */
 html[data-hamsoo-on] [data-hamsoo-box="rtl"] {
@@ -92,36 +101,36 @@ html[data-hamsoo-on] [data-hamsoo="rtl"] code[data-hamsoo="ltr-mixed"] {
    and the readability sliders appeared to do nothing there. Bilingual blocks
    ('ltr-mixed') are included for the same reason RTL ones are: the Persian
    run inside them is what the typography exists for. */
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *),
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *) {
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-typo] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not([data-hamsoo-run]):not([data-hamsoo-run] *) {
   font-family: var(--hamsoo-font, inherit) !important;
 }
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup),
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup) {
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-read] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(sub):not(sup):not([data-hamsoo-run]):not([data-hamsoo-run] *) {
   font-size: var(--hamsoo-size, 15px) !important;
   line-height: var(--hamsoo-lh, 1.9) !important;
 }
 /* Weight also has to reach the inner text nodes on NotebookLM; exclude b/strong
    so real emphasis is preserved. */
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong),
-html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong),
-html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong) {
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="notebooklm"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="rtl"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong):not([data-hamsoo-run]):not([data-hamsoo-run] *),
+html[data-hamsoo-site="kimi"][data-hamsoo-on][data-hamsoo-weight] [data-hamsoo="ltr-mixed"] *:not(pre):not(pre *):not(code):not(code *):not(b):not(strong):not([data-hamsoo-run]):not([data-hamsoo-run] *) {
   font-weight: var(--hamsoo-weight, 400) !important;
   font-synthesis: weight style !important;
 }
 
-/* Phase 9: opt-in text alignment (justify) for Persian prose. Higher
+/* Opt-in text alignment (justify) for Persian prose. Higher
    specificity than the base 'start' rule so it wins when chosen. */
 html[data-hamsoo-on][data-hamsoo-justify] [data-hamsoo="rtl"] {
   text-align: justify !important;
 }
 
-/* Phase 9: reading width (measure). Caps line length on prose blocks for
+/* Reading width (measure). Caps line length on prose blocks for
    easier reading; table cells are excluded so tables keep their layout.
 
    Code is excluded too. A measure cap is a PROSE readability setting, but the

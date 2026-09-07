@@ -487,7 +487,6 @@ html.dark .accent-amber { background: #DE9255; }
   }
 }
 
-/* Phase 1 additions */
 .scope-hint { margin: 8px 0 0; font-size: 11px; color: var(--text-2); }
 /* When the UI language is English the root flips to LTR; keep hint paragraphs
    left-to-right so a trailing period sits at the end, not the start. */
@@ -499,7 +498,7 @@ html[dir="ltr"] .scope-hint { direction: ltr; text-align: left; }
 .backup-row { display: flex; gap: 8px; margin-top: 10px; }
 .backup-row .btn { flex: 1 1 0; text-align: center; }
 
-/* Phase 2: suggestion state for an unlisted, Persian-heavy page */
+/* Suggestion state for an unlisted, Persian-heavy page */
 .current-site.suggest { background: var(--accent-soft); border: 1px solid var(--accent); }
 .current-site.suggest #currentSiteState { color: var(--accent); font-weight: 600; }
 
@@ -638,7 +637,7 @@ body.disabled-global #viewMain > .card:not(#currentSiteCard) {
   filter: grayscale(0.4);
 }
 
-/* Phase 9: inline rows for alignment / reading-width segmented controls. */
+/* Inline rows for alignment / reading-width segmented controls. */
 .control-row {
   display: flex;
   align-items: center;
@@ -778,18 +777,6 @@ body.disabled-global #viewMain > .card:not(#currentSiteCard) {
 .backup-row .btn {
   flex: 1;
 }
-
-.sync-row {
-  text-align: center;
-  margin-top: 6px;
-}
-.sync-status {
-  font-size: 11px;
-  opacity: 0.65;
-  letter-spacing: 0.01em;
-}
-.sync-status.active { color: var(--accent); opacity: 0.8; }
-.sync-status.unavailable { opacity: 0.4; }
 
 /* ---------- Welcome tour re-entry ----------
    Title, button and hint stacked in three left-aligned rows read as a tall,

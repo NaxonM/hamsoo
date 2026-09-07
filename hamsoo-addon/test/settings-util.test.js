@@ -85,49 +85,28 @@ test('migrateSettings v0->v1 drops value-less site overrides', () => {
   assert.equal(res.settings.siteOverrides.chatgpt.fontSize, 17);
 });
 
-test('migrateSettings v1->v2 adds syncVersion: 0', () => {
-  // Simulate a v1 payload (has schemaVersion 1, no syncVersion).
-  const v1 = { enabled: true, schemaVersion: 1, font: 'Vazirmatn' };
+test('migrateSettings strips leftover syncVersion', () => {
+  const v1 = { enabled: true, schemaVersion: 1, font: 'Vazirmatn', syncVersion: 5 };
   const res = util.migrateSettings(v1);
   assert.equal(res.changed, true);
   assert.equal(res.settings.schemaVersion, util.SCHEMA_VERSION);
-  assert.equal(res.settings.syncVersion, 0);
+  assert.equal(res.settings.syncVersion, undefined);
+  assert.equal(res.settings.font, 'Vazirmatn');
 });
 
-test('migrateSettings v1->v2 does not overwrite existing syncVersion', () => {
-  // If a v1 payload somehow already has a syncVersion (e.g. manual edit),
-  // the migration must not reset it.
-  const v1WithVer = { enabled: true, schemaVersion: 1, syncVersion: 5 };
-  const res = util.migrateSettings(v1WithVer);
-  assert.equal(res.settings.syncVersion, 5);
-});
-
-test('incrementSyncVersion increments and returns new value', () => {
-  const s = { syncVersion: 3 };
-  const next = util.incrementSyncVersion(s);
-  assert.equal(next, 4);
-  assert.equal(s.syncVersion, 4);
-});
-
-test('incrementSyncVersion initializes missing syncVersion to 1', () => {
-  const s = {};
-  const next = util.incrementSyncVersion(s);
-  assert.equal(next, 1);
-  assert.equal(s.syncVersion, 1);
-});
-
-test('getSlimSettingsForSync trims heavy font payload for storage.sync', () => {
-  const full = {
-    font: 'Vazirmatn',
-    syncVersion: 2,
-    customFonts: [{ id: 'font1', name: 'Custom Font 1', bytes: 'heavyBase64Data' }]
+test('migrateSettings v3->v4 drops remoteOnly font metadata', () => {
+  const v3 = {
+    schemaVersion: 3,
+    customFonts: [
+      { id: 'local', name: 'Local', format: 'woff2', size: 12 },
+      { id: 'ghost', name: 'Ghost', remoteOnly: true }
+    ]
   };
-  const slim = util.getSlimSettingsForSync(full);
-  assert.equal(slim.font, 'Vazirmatn');
-  assert.equal(slim.syncVersion, 2);
-  assert.equal(slim.customFonts[0].bytes, undefined);
-  assert.equal(slim.customFonts[0].id, 'font1');
-  assert.equal(slim.customFonts[0].name, 'Custom Font 1');
+  const res = util.migrateSettings(v3);
+  assert.equal(res.changed, true);
+  assert.equal(res.settings.customFonts.length, 1);
+  assert.equal(res.settings.customFonts[0].id, 'local');
+  assert.equal(res.settings.customFonts[0].remoteOnly, undefined);
 });
 
 /* ---------- schema v3: onboarding + feedback-ask state ---------- */
@@ -137,7 +116,7 @@ const FIXED_NOW = 1700000000000;
 test('migrateSettings v2->v3 seeds onboardedVersion at the current welcome version', () => {
   // An upgrading user has already been using Hamsoo, so the first-run tour must
   // not fire at them. Fresh installs start at 0 and never reach migrateSettings.
-  const v2 = { enabled: true, schemaVersion: 2, syncVersion: 4 };
+  const v2 = { enabled: true, schemaVersion: 2 };
   const res = util.migrateSettings(v2, FIXED_NOW);
   assert.equal(res.changed, true);
   assert.equal(res.settings.schemaVersion, util.SCHEMA_VERSION);
@@ -158,14 +137,14 @@ test('migrateSettings v2->v3 starts the feedback clock at the upgrade moment', (
 
 test('migrateSettings v2->v3 preserves every existing setting', () => {
   const v2 = {
-    schemaVersion: 2, syncVersion: 9, enabled: false, font: 'Sahel', fontSize: 18,
+    schemaVersion: 2, enabled: false, font: 'Sahel', fontSize: 18,
     customSites: ['https://a.example/*'], siteOverrides: { chatgpt: { enabled: true, fontSize: 17 } }
   };
   const res = util.migrateSettings(v2, FIXED_NOW);
   assert.equal(res.settings.enabled, false);
   assert.equal(res.settings.font, 'Sahel');
   assert.equal(res.settings.fontSize, 18);
-  assert.equal(res.settings.syncVersion, 9);
+  assert.equal(res.settings.syncVersion, undefined);
   assert.equal(res.settings.siteOverrides.chatgpt.fontSize, 17);
   assert.equal(JSON.stringify(res.settings.customSites), JSON.stringify(['https://a.example/*']));
 });
@@ -246,145 +225,14 @@ test('normalizeSupport falls back to the injected now for installedAt', () => {
   assert.equal(util.normalizeSupport({ installedAt: -1 }, FIXED_NOW).installedAt, FIXED_NOW);
 });
 
-test('getSlimSettingsForSync keeps the shareable support fields only', () => {
-  const slim = util.getSlimSettingsForSync({
-    font: 'Vazirmatn',
-    support: {
-      installedAt: FIXED_NOW,
-      usageDays: ['2026-07-09', '2026-07-10'],
-      askCount: 1,
-      snoozeUntil: FIXED_NOW,
-      dismissedForever: true,
-      actedAt: 0
-    }
-  });
-  // Local facts must not travel: a long-standing install would otherwise make a
-  // brand-new device look immediately eligible.
-  assert.equal(slim.support.installedAt, undefined);
-  assert.equal(slim.support.usageDays, undefined);
-  // The decision itself does travel.
-  assert.equal(slim.support.dismissedForever, true);
-  assert.equal(slim.support.askCount, 1);
-  assert.equal(slim.support.snoozeUntil, FIXED_NOW);
-});
-
-test('getSlimSettingsForSync does not mutate the settings it is given', () => {
-  const full = { support: { installedAt: FIXED_NOW, usageDays: ['2026-07-09'] } };
-  util.getSlimSettingsForSync(full);
-  assert.equal(full.support.installedAt, FIXED_NOW);
-  assert.equal(full.support.usageDays.length, 1);
-});
-
-test('mergeSupport keeps local engagement and unions the opt-out', () => {
-  const local = {
-    installedAt: FIXED_NOW,
-    usageDays: ['2026-07-08', '2026-07-09', '2026-07-10'],
-    askCount: 0,
-    snoozeUntil: 0,
-    dismissedForever: false,
-    actedAt: 0
-  };
-  // What actually arrives from storage.sync: the slim half, no local facts.
-  const remote = { askCount: 2, snoozeUntil: FIXED_NOW + 1000, dismissedForever: true };
-  const merged = util.mergeSupport(local, remote);
-  assert.equal(merged.installedAt, FIXED_NOW);
-  assert.equal(merged.usageDays.length, 3);
-  assert.equal(merged.dismissedForever, true);
-  assert.equal(merged.askCount, 2);
-  assert.equal(merged.snoozeUntil, FIXED_NOW + 1000);
-});
-
-test('mergeSupport never lowers a local askCount or snooze', () => {
-  const local = { askCount: 2, snoozeUntil: FIXED_NOW + 5000, installedAt: FIXED_NOW };
-  const merged = util.mergeSupport(local, { askCount: 0, snoozeUntil: 0 });
-  assert.equal(merged.askCount, 2);
-  assert.equal(merged.snoozeUntil, FIXED_NOW + 5000);
-});
-
-test('mergeSupport records the earliest moment the user acted', () => {
-  const merged = util.mergeSupport({ actedAt: FIXED_NOW }, { actedAt: FIXED_NOW - 9000 });
-  assert.equal(merged.actedAt, FIXED_NOW - 9000);
-  assert.equal(merged.dismissedForever, true);
-});
-
-test('mergeSupport tolerates missing objects on either side', () => {
-  assert.equal(util.mergeSupport(undefined, undefined).askCount, 0);
-  assert.equal(util.mergeSupport(null, { dismissedForever: true }).dismissedForever, true);
-});
-
-test('support survives a full slim sync round-trip', () => {
-  // The regression this design exists to prevent: a newer remote copy carries no
-  // installedAt or usageDays, so a plain overwrite would erase this device's
-  // earned engagement and restart the seven-day clock.
-  const local = {
-    font: 'Sahel',
-    syncVersion: 1,
-    onboardedVersion: 1,
-    support: {
-      installedAt: FIXED_NOW - 30 * util.DAY_MS,
-      usageDays: ['2026-07-08', '2026-07-09', '2026-07-10'],
-      askCount: 0,
-      snoozeUntil: 0,
-      dismissedForever: false,
-      actedAt: 0
-    }
-  };
-  const remote = util.getSlimSettingsForSync({
-    font: 'Estedad',
-    syncVersion: 2,
-    onboardedVersion: 1,
-    support: {
-      installedAt: FIXED_NOW,
-      usageDays: ['2026-07-01'],
-      askCount: 1,
-      snoozeUntil: 0,
-      dismissedForever: true,
-      actedAt: 0
-    }
-  });
-  const merged = util.mergeSyncedSettings(local, remote);
-  assert.equal(merged.font, 'Estedad', 'ordinary settings still follow the newer copy');
-  assert.equal(merged.support.installedAt, FIXED_NOW - 30 * util.DAY_MS);
-  assert.equal(merged.support.usageDays.length, 3);
-  assert.equal(merged.support.dismissedForever, true);
-  assert.equal(merged.support.askCount, 1);
-});
-
-test('mergeSyncedSettings keeps the higher onboardedVersion', () => {
-  // Seen on any device counts as seen. Taking the LOWER value (the original
-  // behavior) meant a slim or freshly installed remote copy -- where the field
-  // is 0 or missing entirely -- dragged a fully onboarded device back to 0 on
-  // every pull, permanently corrupting the marker. Tour auto-open is
-  // install-only, so nothing re-shows the tour; the state just went wrong.
-  const merged = util.mergeSyncedSettings({ onboardedVersion: 0 }, { onboardedVersion: 1 });
-  assert.equal(merged.onboardedVersion, 1);
-  const both = util.mergeSyncedSettings({ onboardedVersion: 1 }, { onboardedVersion: 1 });
-  assert.equal(both.onboardedVersion, 1);
-  // The regression case: an onboarded device pulling a slim remote copy.
-  const slimRemote = util.mergeSyncedSettings({ onboardedVersion: 1 }, {});
-  assert.equal(slimRemote.onboardedVersion, 1, 'a remote copy without the field must not reset it');
-  const zeroRemote = util.mergeSyncedSettings({ onboardedVersion: 1 }, { onboardedVersion: 0 });
-  assert.equal(zeroRemote.onboardedVersion, 1, 'a fresh remote install must not reset it');
-});
-
-test('mergeSyncedSettings unions customSelectors instead of overwriting', () => {
-  // An empty remote map used to erase every pick another device had made,
-  // because the plain key-by-key overwrite treated {} as an authoritative value.
-  const wiped = util.mergeSyncedSettings(
-    { customSelectors: { 'a.com': ['div.x'] } },
-    { customSelectors: {} }
-  );
-  assert.equal(JSON.stringify(wiped.customSelectors), JSON.stringify({ 'a.com': ['div.x'] }),
-    'empty remote must not wipe local picks');
-
-  const unioned = util.mergeSyncedSettings(
-    { customSelectors: { 'a.com': ['div.x'], 'b.com': ['p.y'] } },
-    { customSelectors: { 'a.com': ['div.x', 'span.z'] } }
-  );
-  assert.equal(JSON.stringify(unioned.customSelectors['a.com']), JSON.stringify(['div.x', 'span.z']),
-    'per-host lists union and dedupe');
-  assert.equal(JSON.stringify(unioned.customSelectors['b.com']), JSON.stringify(['p.y']),
-    'hosts absent from remote survive');
+test('removed cloud-sync helpers are not exported', () => {
+  assert.equal(typeof util.mergeSyncedSettings, 'undefined');
+  assert.equal(typeof util.getSlimSettingsForSync, 'undefined');
+  assert.equal(typeof util.incrementSyncVersion, 'undefined');
+  assert.equal(typeof util.mergeSupport, 'undefined');
+  assert.equal(typeof util.mergeCustomFonts, 'undefined');
+  assert.equal(typeof util.getLastSyncError, 'undefined');
+  assert.equal(util.SYNC_QUOTA_BYTES_PER_ITEM, undefined);
 });
 
 test('isValidMatchPattern rejects registry-wide wildcards', () => {
@@ -404,41 +252,21 @@ test('normalizeDigitsScript is case-insensitive', () => {
   assert.equal(util.normalizeDigitsScript(undefined), 'fa');
 });
 
-test('persistSettings surfaces sync failures instead of swallowing them', async () => {
-  // The local write is still authoritative, so the call resolves true -- but a
-  // rejected or over-quota sync mirror must be reported, not reported as success.
-  const seen = [];
-  const api = {
-    storage: {
-      local: { set: async () => {} },
-      sync: { set: async () => { throw new Error('QUOTA_BYTES_PER_ITEM quota exceeded'); } }
-    }
-  };
-  const ok = await util.persistSettings(api, { enabled: true }, { onSyncError: e => seen.push(e) });
-  assert.equal(ok, true, 'a sync failure does not fail the local save');
-  assert.equal(seen.length, 1, 'the failure is reported');
-  assert.equal(seen[0].kind, 'write');
-  assert.ok(util.getLastSyncError(), 'the failure is recorded for the UI');
-});
-
-test('persistSettings refuses to mirror a payload over the sync item quota', async () => {
-  const seen = [];
+test('persistSettings writes local storage and never touches storage.sync', async () => {
+  let localWrites = 0;
   let mirrored = false;
+  const payload = { enabled: true, syncVersion: 9 };
   const api = {
     storage: {
-      local: { set: async () => {} },
+      local: { set: async obj => { localWrites += 1; payload.saved = obj.settings; } },
       sync: { set: async () => { mirrored = true; } }
     }
   };
-  const fat = { enabled: true, customSelectors: {} };
-  for (let i = 0; i < 120; i += 1) {
-    fat.customSelectors['example-site-' + i + '.com'] =
-      ['div.message-bubble-container.prose-wrapper-' + i, 'article.chat-turn__body--assistant-' + i];
-  }
-  assert.ok(util.estimateSyncBytes(fat) > util.SYNC_QUOTA_BYTES_PER_ITEM, 'probe payload exceeds the quota');
-  await util.persistSettings(api, fat, { onSyncError: e => seen.push(e) });
-  assert.equal(mirrored, false, 'an over-quota payload is not sent');
-  assert.equal(seen[0].kind, 'quota');
+  const ok = await util.persistSettings(api, payload);
+  assert.equal(ok, true);
+  assert.equal(localWrites, 1);
+  assert.equal(mirrored, false, 'cloud sync is gone; nothing is mirrored');
+  assert.equal(payload.syncVersion, undefined, 'leftover counters are stripped');
 });
 
 /* ---------- Phase 3: the serialized write funnel ---------- */
@@ -466,18 +294,18 @@ test('updateStoredSettings serializes concurrent writes instead of losing one', 
   // Two writers touching DIFFERENT fields, started in the same tick. With a
   // plain get -> mutate -> set both read the same snapshot and the second set
   // erased the first one's field.
-  const { api, box } = slowStorage({ syncVersion: 0 });
+  const { api, box } = slowStorage({});
   await Promise.all([
     util.updateStoredSettings(api, s => { s.enabled = false; }),
     util.updateStoredSettings(api, s => { s.lang = 'fa'; })
   ]);
   assert.equal(box.settings.enabled, false, 'the first writer survived');
   assert.equal(box.settings.lang, 'fa', 'the second writer survived');
-  assert.equal(box.settings.syncVersion, 2, 'both writes bumped the counter');
+  assert.equal(box.settings.syncVersion, undefined, 'no cloud conflict counter is written');
 });
 
 test('updateStoredSettings mutators observe the previous write', async () => {
-  const { api, box } = slowStorage({ syncVersion: 0, count: 0 });
+  const { api, box } = slowStorage({ count: 0 });
   await Promise.all([
     util.updateStoredSettings(api, s => { s.count += 1; }),
     util.updateStoredSettings(api, s => { s.count += 1; }),
@@ -488,7 +316,7 @@ test('updateStoredSettings mutators observe the previous write', async () => {
 
 test('updateStoredSettings skips the write when the mutator declines', async () => {
   let writes = 0;
-  const box = { settings: { lang: 'fa', syncVersion: 3 } };
+  const box = { settings: { lang: 'fa' } };
   const api = {
     storage: {
       local: {
@@ -500,7 +328,7 @@ test('updateStoredSettings skips the write when the mutator declines', async () 
   const res = await util.updateStoredSettings(api, s => (s.lang === 'fa' ? false : undefined));
   assert.equal(res, null, 'a declined mutation resolves null');
   assert.equal(writes, 0, 'no write was issued');
-  assert.equal(box.settings.syncVersion, 3, 'the counter was not bumped');
+  assert.equal(box.settings.lang, 'fa');
 });
 
 test('a failed write does not wedge the queue for later writers', async () => {
@@ -527,9 +355,7 @@ test('a failed write does not wedge the queue for later writers', async () => {
   assert.equal(box.settings.lang, 'en', 'a later write still goes through');
 });
 
-test('persistSettings localOnly writes local without mirroring to sync', async () => {
-  // Usage days and install age are per-device and stripped from the slim
-  // payload, so mirroring them is a pure round-trip cost.
+test('persistSettings ignores leftover sync options and still never mirrors', async () => {
   let wrote = false;
   let mirrored = false;
   const api = {
@@ -538,9 +364,9 @@ test('persistSettings localOnly writes local without mirroring to sync', async (
       sync: { set: async () => { mirrored = true; } }
     }
   };
-  await util.persistSettings(api, { support: { usageDays: ['2026-07-29'] } }, { localOnly: true, bump: false });
+  await util.persistSettings(api, { support: { usageDays: ['2026-07-29'] } }, { localOnly: false, bump: true });
   assert.equal(wrote, true, 'the local write still happens');
-  assert.equal(mirrored, false, 'per-device data is not mirrored to sync');
+  assert.equal(mirrored, false, 'nothing is mirrored to storage.sync');
 });
 
 /* ---------- Phase 2: feedback ask ---------- */
@@ -708,19 +534,6 @@ test('acting on the ask records the moment and stops all future asks', () => {
   const reread = util.normalizeSupport(JSON.parse(JSON.stringify(acted)), FIXED_NOW);
   assert.equal(reread.dismissedForever, true);
   assert.equal(util.supportAskDecision({ enabled: true, support: reread }, FIXED_NOW).reason, 'dismissed');
-});
-
-test('a dismissal on one device silences the ask on the other', () => {
-  // The cross-device promise: dismissing travels, engagement does not.
-  const local = eligibleSettings(FIXED_NOW);
-  local.syncVersion = 1;
-  const remoteFull = eligibleSettings(FIXED_NOW);
-  remoteFull.syncVersion = 2;
-  remoteFull.support = util.dismissSupportForever(remoteFull.support, FIXED_NOW);
-  const merged = util.mergeSyncedSettings(local, util.getSlimSettingsForSync(remoteFull));
-  assert.equal(util.supportAskDecision(merged, FIXED_NOW).reason, 'dismissed');
-  // The local engagement record is still intact after the merge.
-  assert.equal(merged.support.usageDays.length, 3);
 });
 
 test('the ask destination follows the build target', () => {

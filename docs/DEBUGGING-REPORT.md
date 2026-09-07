@@ -1,5 +1,10 @@
 # Hamsoo — Debugging Report & Regression Ledger
 
+> **Not the current backlog.** Open work is H01–H15 in [`GROUND-TRUTH.md`](GROUND-TRUTH.md)
+> and [`HANDOVER.md`](HANDOVER.md) (7 Sep 2026 audit). This file is the historical
+> R1–R6 ledger. Source comments cite those R-numbers. Keep the guards; do not
+> re-open items listed here as “fixed.”
+
 Permanent record of the pre-1.3.0 debugging audit, the fixes that resolved it, and
 the regressions the fix work itself introduced. This file is part of the code
 base on purpose: each entry names the failure mode, the fix, and the guard that

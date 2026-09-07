@@ -18,7 +18,8 @@ const EXPECTED_CHECKS = [
   'picked element marked rtl',
   'picked element computed direction is rtl',
   'unpicked sibling div stays unmarked',
-  'invalid stored selector does not break scanning'
+  'invalid stored selector does not break scanning',
+  'removing a picked selector unstyles the element'
 ];
 
 const chromeBin = findChrome();
@@ -50,6 +51,18 @@ if (!chromeBin) {
           '<div id="picked" class="pick-me">\u0627\u06cc\u0646 \u06cc\u06a9 \u0645\u062a\u0646 \u0641\u0627\u0631\u0633\u06cc \u0627\u0633\u062a.</div>',
           '<div id="control">\u0627\u06cc\u0646 \u0647\u0645 \u0641\u0627\u0631\u0633\u06cc \u0627\u0633\u062a.</div>',
           '<script src="stub.js"></script>',
+          '<script>',
+          '(function(){',
+          '  var listeners = [];',
+          '  chrome.storage.onChanged = { addListener: function(fn){ listeners.push(fn); } };',
+          '  window.__push = function(s){',
+          '    chrome.storage.local.set({ settings: s });',
+          '    for (var i = 0; i < listeners.length; i++) {',
+          '      listeners[i]({ settings: { newValue: s } }, "local");',
+          '    }',
+          '  };',
+          '})();',
+          '</script>',
           '<script src="shared/settings-util.js"></script>',
           '<script src="content.js"></script>',
           '<script src="selectors-checks.js"></script>',

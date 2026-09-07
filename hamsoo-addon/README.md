@@ -18,7 +18,7 @@ build.js                 Generates dist/hamsoo-chromium and dist/hamsoo-firefox
 scripts/check.js         Static checks: JS syntax, JSON validity, i18n parity, lint
 scripts/bump-version.js  Version + changelog bump (package.json is the source of truth)
 scripts/version-sites.js The registry of every place a version number is written
-test/                    No-dependency test suite. 217 tests.
+test/                    No-dependency test suite. Register new files in `test/run.js`.
 website/                 Project website, deployed to GitHub Pages
 .github/workflows/       CI lives at the REPO root, not here
 dist/                    Build output (generated; git-ignored)

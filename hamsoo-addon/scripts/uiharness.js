@@ -56,7 +56,25 @@ function stubSource(seedSettings = null) {
       id: 'hamsoo-stub-id',
       getManifest: () => ({ version: '${PKG_VERSION}' }),
       getURL: (path) => path,
-      sendMessage: (_msg, cb) => { if (cb) cb(); },
+      sendMessage: (msg, cb) => {
+        let res;
+        if (msg && msg.type === 'HAMSOO_PATCH_SETTINGS') {
+          const helper = globalThis.HamsooUtil;
+          if (!_s || typeof _s !== 'object') _s = {};
+          if (helper && typeof helper.applySettingsPatch === 'function') {
+            helper.applySettingsPatch(_s, msg.patch || {});
+          } else if (msg.patch && msg.patch.replace && typeof msg.patch.replace === 'object') {
+            _s = JSON.parse(JSON.stringify(msg.patch.replace));
+          } else if (msg.patch && msg.patch.fields && typeof msg.patch.fields === 'object') {
+            Object.assign(_s, msg.patch.fields);
+          }
+          const copy = JSON.parse(JSON.stringify(_s));
+          globalThis.__HAMSOO_LAST_SET__ = { settings: copy };
+          res = { ok: true, settings: copy };
+        }
+        if (cb) cb(res);
+        return Promise.resolve(res);
+      },
       onMessage: { addListener: () => {} },
       openOptionsPage: () => {}
     },

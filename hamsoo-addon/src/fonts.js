@@ -53,18 +53,29 @@ async function loadSettings() {
   if (!Array.isArray(settings.customFonts)) settings.customFonts = [];
 }
 
-async function saveSettings() {
-  if (!hasAPI) return;
-  try {
-    const util = globalThis.HamsooUtil;
-    if (util && typeof util.persistSettings === 'function') {
-      await util.persistSettings(api, settings);
-    } else {
-      await api.storage.local.set({ settings });
-    }
-  } catch (_) {
-    setStatus(t('saveSettingsError'));
+function sendSettingsPatch(patch) {
+  if (!hasAPI || !api.runtime || typeof api.runtime.sendMessage !== 'function') {
+    return Promise.reject(new Error('no runtime'));
   }
+  const sent = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch });
+  if (sent && typeof sent.then === 'function') return sent;
+  return new Promise((resolve, reject) => {
+    try {
+      api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+        const err = api.runtime && api.runtime.lastError;
+        if (err) reject(new Error(err.message || String(err)));
+        else resolve(res);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function applyRemoteSettings(next) {
+  if (next && typeof next === 'object') settings = next;
+  if (!settings || typeof settings !== 'object') settings = { customFonts: [], font: 'Vazirmatn' };
+  if (!Array.isArray(settings.customFonts)) settings.customFonts = [];
 }
 
 function familyFor(id) {
@@ -100,8 +111,7 @@ async function render() {
     return;
   }
   for (const font of fonts) {
-    // A settings copy that came back through storage.sync may be missing
-    // metadata; never let one bad entry blank the whole page.
+    // Never let one bad entry blank the whole page.
     if (!font || typeof font.id !== 'string') continue;
     const row = document.createElement('div');
     row.className = 'font-row';
@@ -111,32 +121,15 @@ async function render() {
     const name = document.createElement('strong');
     name.textContent = typeof font.name === 'string' && font.name ? font.name : t('defaultFontName');
     const info = document.createElement('span');
-    // A remoteOnly entry is metadata synced from another device: the bytes live
-    // in that device's IndexedDB and never sync. Say so instead of rendering a
-    // normal-looking row whose preview silently falls back to Vazirmatn and
-    // whose selection silently does nothing.
-    const unavailable = font.remoteOnly === true;
-    if (unavailable) {
-      row.classList.add('font-unavailable');
-      info.textContent = t('fontUnavailable');
-      info.title = t('fontUnavailableHint');
-    } else {
-      const fmt = typeof font.format === 'string' && font.format ? font.format.toUpperCase() : '—';
-      info.textContent = fmt + (font.size ? ' · ' + formatSize(font.size) : '');
-    }
+    const fmt = typeof font.format === 'string' && font.format ? font.format.toUpperCase() : '—';
+    info.textContent = fmt + (font.size ? ' · ' + formatSize(font.size) : '');
     meta.append(name, info);
 
     const sample = document.createElement('div');
     sample.className = 'font-sample';
-    if (unavailable) {
-      // No face to load, so don't ask IndexedDB for bytes that aren't there.
-      sample.textContent = t('fontUnavailableHint');
-      sample.classList.add('font-sample-missing');
-    } else {
-      sample.textContent = customSampleText || t('sampleText');
-      sample.style.fontFamily = '"' + familyFor(font.id) + '", "Vazirmatn", Tahoma, sans-serif';
-      void ensurePreview(font.id);
-    }
+    sample.textContent = customSampleText || t('sampleText');
+    sample.style.fontFamily = '"' + familyFor(font.id) + '", "Vazirmatn", Tahoma, sans-serif';
+    void ensurePreview(font.id);
 
     const remove = document.createElement('button');
     remove.type = 'button';
@@ -144,13 +137,17 @@ async function render() {
     remove.textContent = t('remove');
     remove.addEventListener('click', async () => {
       try {
-        await globalThis.HamsooFontDB.remove(font.id);
-      } catch (_) { /* metadata cleanup below still applies */ }
-      settings.customFonts = settings.customFonts.filter(f => f.id !== font.id);
-      if (settings.font === CUSTOM_PREFIX + font.id) settings.font = 'Vazirmatn';
-      await saveSettings();
-      await render();
-      setStatus(t('removedFont', font.name));
+        try {
+          await globalThis.HamsooFontDB.remove(font.id);
+        } catch (_) { /* metadata cleanup below still applies */ }
+        const res = await sendSettingsPatch({ removeFont: font.id });
+        if (!res || res.ok === false) throw new Error((res && res.error) || 'save failed');
+        applyRemoteSettings(res.settings);
+        await render();
+        setStatus(t('removedFont', font.name));
+      } catch (_) {
+        setStatus(t('saveSettingsError'));
+      }
     });
 
     row.append(meta, sample, remove);
@@ -175,11 +172,26 @@ async function addFiles(files) {
     }
     try {
       const bytes = await file.arrayBuffer();
+      const sniffed = globalThis.HamsooUtil && typeof globalThis.HamsooUtil.sniffFontFormat === 'function'
+        ? globalThis.HamsooUtil.sniffFontFormat(bytes)
+        : '';
+      if (!sniffed) {
+        setStatus(t('unsupported', file.name));
+        continue;
+      }
+      try {
+        const probe = new FontFace('HamsooProbe_' + Date.now().toString(36), bytes);
+        await probe.load();
+      } catch (_) {
+        setStatus(t('unsupported', file.name));
+        continue;
+      }
       const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       const name = file.name.replace(/\.[^.]+$/, '').slice(0, 120) || t('defaultFontName');
-      await globalThis.HamsooFontDB.put({ id, name, format: ext, bytes, size: file.size, added: Date.now() });
-      settings.customFonts.push({ id, name, format: ext, size: file.size });
-      await saveSettings();
+      await globalThis.HamsooFontDB.put({ id, name, format: sniffed, bytes, size: file.size, added: Date.now() });
+      const res = await sendSettingsPatch({ addFont: { id, name, format: sniffed, size: file.size } });
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'save failed');
+      applyRemoteSettings(res.settings);
       setStatus(t('addedFont', name));
     } catch (_) {
       setStatus(t('addFailed', file.name));
@@ -191,6 +203,13 @@ async function addFiles(files) {
 fileInput.addEventListener('change', () => {
   if (fileInput.files && fileInput.files.length) void addFiles([...fileInput.files]);
   fileInput.value = '';
+});
+
+dropzone.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    fileInput.click();
+  }
 });
 
 for (const eventName of ['dragenter', 'dragover']) {
@@ -209,6 +228,18 @@ dropzone.addEventListener('drop', e => {
   if (e.dataTransfer && e.dataTransfer.files.length) void addFiles([...e.dataTransfer.files]);
 });
 
+// Mirrors popup.js applyTheme(): the fonts page previously relied purely on
+// CSS prefers-color-scheme, ignoring explicit Light/Dark picks from settings.
+const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+
+function applyTheme() {
+  const mode = (settings && settings.mode) || 'system';
+  const accent = (settings && settings.accent) || 'blue';
+  const dark = mode === 'dark' || (mode === 'system' && Boolean(darkQuery && darkQuery.matches));
+  document.documentElement.classList.toggle('dark', dark);
+  document.documentElement.dataset.accent = accent;
+}
+
 (async () => {
   // Apply the UI language synchronously from the localStorage mirror first so
   // the page doesn't start in Persian and visibly flip after storage loads.
@@ -218,11 +249,26 @@ dropzone.addEventListener('drop', e => {
   if (globalThis.HamsooI18n) globalThis.HamsooI18n.applyDom(document, LANG);
 
   await loadSettings();
+  applyTheme();
   const realLang = globalThis.HamsooI18n ? globalThis.HamsooI18n.resolveLang(settings.lang) : 'fa';
   if (realLang !== LANG) {
     LANG = realLang;
     if (globalThis.HamsooI18n) globalThis.HamsooI18n.applyDom(document, LANG);
   }
   try { localStorage.setItem('hamsoo-lang', settings.lang || 'auto'); } catch (_) {}
+  if (darkQuery && typeof darkQuery.addEventListener === 'function') {
+    darkQuery.addEventListener('change', () => {
+      if (!settings || settings.mode === 'system') applyTheme();
+    });
+  }
+  if (hasAPI && api.storage && api.storage.onChanged) {
+    api.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes.settings && changes.settings.newValue) {
+        applyRemoteSettings(changes.settings.newValue);
+        applyTheme();
+        void render();
+      }
+    });
+  }
   await render();
 })();

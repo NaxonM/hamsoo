@@ -123,8 +123,8 @@
     // Range geometry reveals the actual visual order the bidi algorithm chose.
     // In correct rendering the first Persian word sits to the RIGHT of the
     // last one; under an override the order is mirrored.
-    const node = document.getElementById('sMixed').firstChild;
-    const text = node.nodeValue;
+    const node = Array.prototype.find.call(document.getElementById('sMixed').childNodes, n => n.nodeType === 3 && n.nodeValue && n.nodeValue.indexOf('\u062f\u0631') >= 0);
+    const text = node ? node.nodeValue : null;
     const start = text.indexOf('\u062f\u0631');
     const second = text.indexOf('\u062a\u0639\u0637\u06cc\u0644\u0627\u062a');
     if (start < 0 || second < 0) throw new Error('fixture text changed');

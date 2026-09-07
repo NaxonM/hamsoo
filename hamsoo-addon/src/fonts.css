@@ -6,7 +6,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --canvas: #FFFFFF;
   --surface: #F9F8F7;
   --surface-2: #F0EFED;
@@ -18,19 +18,26 @@
   --danger: #E56458;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #191919;
-    --surface: #202020;
-    --surface-2: #2A2A29;
-    --border: rgba(255, 255, 255, .14);
-    --text: #FFFFFF;
-    --text-2: rgba(255, 255, 255, .65);
-    --accent: #5E9FE8;
-    --accent-soft: rgba(94, 159, 232, .14);
-    --danger: #E97366;
-  }
+html[data-accent="teal"]   { --accent: #128577; --accent-soft: #E2F2EF; }
+html[data-accent="violet"] { --accent: #7C4FC4; --accent-soft: #F0E9FA; }
+html[data-accent="amber"]  { --accent: #B36A26; --accent-soft: #FBEBDE; }
+
+html.dark {
+  color-scheme: dark;
+  --canvas: #191919;
+  --surface: #202020;
+  --surface-2: #2A2A29;
+  --border: rgba(255, 255, 255, .14);
+  --text: #FFFFFF;
+  --text-2: rgba(255, 255, 255, .65);
+  --accent: #5E9FE8;
+  --accent-soft: rgba(94, 159, 232, .14);
+  --danger: #E97366;
 }
+
+html.dark[data-accent="teal"]   { --accent: #4FB9A9; --accent-soft: rgba(79, 185, 169, .14); }
+html.dark[data-accent="violet"] { --accent: #BF8EDA; --accent-soft: rgba(191, 142, 218, .14); }
+html.dark[data-accent="amber"]  { --accent: #DE9255; --accent-soft: rgba(222, 146, 85, .14); }
 
 * { box-sizing: border-box; }
 body {
@@ -50,6 +57,7 @@ body {
 .page-header p { margin: 0; color: var(--text-2); font-size: 13.5px; }
 
 .dropzone {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -63,7 +71,23 @@ body {
   transition: border-color .15s ease, background .15s ease;
 }
 .dropzone.dragover { border-color: var(--accent); background: var(--accent-soft); }
-.dropzone input { display: none; }
+.dropzone:focus,
+.dropzone:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Keep the file input in the tab order. display:none makes Add font unreachable from the keyboard. */
+.dropzone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .dropzone strong { color: var(--accent); font-size: 15px; }
 .dropzone span { color: var(--text-2); font-size: 12.5px; }
 
@@ -83,13 +107,6 @@ body {
 .font-meta strong { display: block; font-size: 14px; }
 .font-meta span { color: var(--text-2); font-size: 12px; }
 .font-sample { flex: 1; font-size: 16px; color: var(--text); text-align: center; }
-
-/* Font metadata synced from another device: the file itself never syncs, so
-   there is nothing to preview or select here. Render the row as informational
-   rather than as an ordinary, usable font. */
-.font-row.font-unavailable { border-style: dashed; opacity: 0.72; }
-.font-row.font-unavailable .font-meta strong { font-style: italic; }
-.font-sample-missing { font-size: 12px; color: var(--text-2); text-align: center; }
 
 .remove-btn {
   border: 1px solid var(--border);

@@ -1,3 +1,6 @@
+> **SUPERSEDED.** Snapshot of the 2026-07-29 B-series. Not the current backlog.
+> See [`../GROUND-TRUTH.md`](../GROUND-TRUTH.md) (H01–H15).
+
 | ID | Sev | Verdict | Evidence |
 |----|-----|---------|----------|
 | B1 | Critical | CONFIRMED | popup normalize() return object omits both fields: support=false onboardedVersion=false |

@@ -98,6 +98,39 @@
   const LATIN_LETTER_RE = new RegExp(LATIN_LETTER_CLASS);
   const LATIN_LETTER_RE_G = new RegExp(LATIN_LETTER_CLASS, 'g');
 
+  // Bare Latin text runs inside RTL prose. In a block with dir="rtl",
+  // neutral punctuation at the end of an English run (colons, dots, quotes)
+  // inherits the RTL base and jumps to the wrong end of the line.
+  // Matches from the first Latin letter up to any RTL character or digit.
+  const RTL_CHAR_CLASS = '[\\u0590-\\u08FF\\uFB1D-\\uFDFF\\uFE70-\\uFEFF]';
+  const LTR_RUN_RE_G = new RegExp(LATIN_LETTER_CLASS + '[^' + RTL_CHAR_CLASS.slice(1) + '*', 'g');
+
+  // Delimiter balance: in a Persian sentence like "یک پروسه (process) باز می‌کند",
+  // a naive run match would greedily swallow the closing paren and leave the
+  // opening paren outside, flipping them to "()process". Peel off any trailing
+  // closing brackets or quotes that lack a matching opener inside the run so
+  // surrounding punctuation stays in the parent RTL context.
+  const UNPAIRED_PAIRS = { ')': '(', ']': '[', '}': '{', '"': '"', "'": "'", '»': '«', '”': '“', '’': '‘' };
+  function trimUnpairedTrailing(s) {
+    let end = s.length;
+    while (end > 0) {
+      const ch = s.charAt(end - 1);
+      if (UNPAIRED_PAIRS[ch]) {
+        const opener = UNPAIRED_PAIRS[ch];
+        const sub = s.slice(0, end);
+        const openCount = (sub.match(new RegExp('\\' + opener, 'g')) || []).length;
+        if (opener === ch) {
+          if (openCount % 2 !== 0) { end -= 1; continue; }
+        } else {
+          const closeCount = (sub.match(new RegExp('\\' + ch, 'g')) || []).length;
+          if (closeCount > openCount) { end -= 1; continue; }
+        }
+      }
+      break;
+    }
+    return s.slice(0, end);
+  }
+
   // How much of an element's lettered content needs to be RTL before a block
   // whose FIRST strong character is Latin is still treated as RTL. This is the
   // fallback signal only -- see isRTLBlock.
@@ -427,10 +460,16 @@
 
   function isActive(current) {
     if (!current || !current.enabled) return false;
-    // On unlisted hosts, being injected at all is the user's explicit opt-in
-    // (they granted permission and registered the site from the popup).
-    if (!SITE) return true;
-    return current.sites[SITE] !== false;
+    if (SITE) return current.sites[SITE] !== false;
+    // Custom http(s) hosts stay active only while they remain in customSites.
+    // file: fixtures (tests) have no match pattern, so injection itself is the opt-in.
+    const protocol = location.protocol;
+    if (protocol !== 'http:' && protocol !== 'https:') return true;
+    const util = globalThis.HamsooUtil;
+    if (util && typeof util.urlMatchesCustomSites === 'function') {
+      return util.urlMatchesCustomSites(location.href, current.customSites);
+    }
+    return false;
   }
 
   function textOf(el) {
@@ -588,7 +627,7 @@
         const needsRescript = record !== undefined && record.script !== script;
         if (!needsConvert && !needsRescript) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
-        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [href]')) {
+        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [href], [data-hamsoo-run]')) {
           return NodeFilter.FILTER_REJECT;
         }
         if (inNestedBlock(node, el)) return NodeFilter.FILTER_REJECT;
@@ -644,6 +683,79 @@
   // though the surrounding text was now English and no longer marked RTL.
   function restoreDigitsIfNeeded(el) {
     if (!el.matches(EDITABLE_SELECTOR)) restoreDigits(el);
+  }
+
+  // Wraps bare Latin text nodes in <span data-hamsoo-run="ltr"> inside RTL
+  // blocks. Element-level classification cannot reach bare text nodes,
+  // and without an explicit isolate span, neutral punctuation at the English
+  // boundary inherits the container's RTL direction and flips margins.
+  function isolateBareLTRRuns(el) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        const parent = node.parentElement;
+        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [data-hamsoo-run]')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (inNestedBlock(node, el)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+
+    for (const node of nodes) {
+      const text = node.nodeValue;
+      if (!LATIN_LETTER_RE.test(text)) continue;
+      LTR_RUN_RE_G.lastIndex = 0;
+
+      const pieces = [];
+      let m;
+      while ((m = LTR_RUN_RE_G.exec(text))) {
+        const run = m[0];
+        const start = m.index;
+        const sp = /\s+$/.exec(run);
+        const len = sp ? run.length - sp[0].length : run.length;
+        const cleanRun = trimUnpairedTrailing(run.slice(0, len));
+        if (!cleanRun) continue;
+        pieces.push({ start, end: start + cleanRun.length, text: cleanRun });
+      }
+      if (!pieces.length) continue;
+
+      const frag = document.createDocumentFragment();
+      let cursor = 0;
+      for (const piece of pieces) {
+        if (piece.start > cursor) {
+          frag.appendChild(document.createTextNode(text.slice(cursor, piece.start)));
+        }
+        const span = document.createElement('span');
+        span.setAttribute('dir', 'ltr');
+        span.setAttribute('data-hamsoo-run', 'ltr');
+        span.textContent = piece.text;
+        frag.appendChild(span);
+        cursor = piece.end;
+      }
+      if (cursor < text.length) {
+        frag.appendChild(document.createTextNode(text.slice(cursor)));
+      }
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  // Tears down data-hamsoo-run spans and merges sibling text nodes back to
+  // their pre-injection state. 'block' (reclassification) leaves nested RTL
+  // blocks untouched; 'tree' unwraps the entire subtree for clean disable.
+  function restoreBareLTRRuns(el, scope) {
+    const wholeTree = scope === 'tree';
+    const spans = el.querySelectorAll('[data-hamsoo-run]');
+    for (const span of spans) {
+      if (!wholeTree && inNestedBlock(span, el)) continue;
+      const parent = span.parentNode;
+      if (!parent) continue;
+      while (span.firstChild) parent.insertBefore(span.firstChild, span);
+      parent.removeChild(span);
+      parent.normalize();
+    }
   }
 
   // Remembers the dir attribute an editable carried BEFORE we touched it.
@@ -730,6 +842,8 @@
     if (isRTLBlock(text) || rtlByContext) {
       mark(el, 'rtl');
       if (!el.matches(EDITABLE_SELECTOR)) {
+        restoreBareLTRRuns(el);
+        isolateBareLTRRuns(el);
         if (settings.digitsEnabled) {
           localizeDigits(el);
         } else {
@@ -741,6 +855,7 @@
     } else if (text.trim() && inRTLContext(el)) {
       // LTR-based element inside an RTL ambient context: give it an LTR base so
       // neutral punctuation does not jump to the wrong end of the line.
+      restoreBareLTRRuns(el);
       restoreDigitsIfNeeded(el);
       markLTR(el, text);
       if (wasRTL) reclassifyDescendants(el);
@@ -753,10 +868,12 @@
       //
       // Digits are deliberately NOT localized on this path: the block is
       // majority-Latin, so its numbers usually belong to the English text.
+      restoreBareLTRRuns(el);
       restoreDigitsIfNeeded(el);
       markLTR(el, text);
       if (wasRTL) reclassifyDescendants(el);
     } else {
+      restoreBareLTRRuns(el);
       restoreDigitsIfNeeded(el);
       unmark(el);
       if (wasRTL) reclassifyDescendants(el);
@@ -846,6 +963,21 @@
     return valid.join(',');
   }
 
+  function unstyleDroppedSelectors(oldSel, newSel) {
+    const roots = [document];
+    for (const root of shadowRoots) roots.push(root);
+    for (const root of roots) {
+      let oldEls;
+      try { oldEls = collect(root, oldSel); } catch (_) { continue; }
+      for (const el of oldEls) {
+        if (newSel) {
+          try { if (el.matches(newSel)) continue; } catch (_) { /* keep unmarking */ }
+        }
+        unmark(el);
+      }
+    }
+  }
+
   function scan(root) {
     for (const el of collect(root, SELECTOR)) classify(el);
     if (extraSelector) for (const el of collect(root, extraSelector)) classify(el);
@@ -875,6 +1007,7 @@
       // isolation for mixed text so Persian runs are not reversed (R4).
       '[data-hamsoo="ltr"]{direction:ltr !important;text-align:start !important;unicode-bidi:isolate-override !important;}',
       '[data-hamsoo="ltr-mixed"]{direction:ltr !important;text-align:start !important;unicode-bidi:isolate !important;}',
+      '[data-hamsoo-run="ltr"]{direction:ltr !important;text-align:start !important;unicode-bidi:isolate !important;}',
       '[data-hamsoo-box="rtl"]{direction:rtl !important;}',
       '[data-hamsoo="rtl"] pre,[data-hamsoo="rtl"] code[data-hamsoo="ltr"],[data-hamsoo="rtl"] code[data-hamsoo="ltr-mixed"]{unicode-bidi:isolate;}'
     ];
@@ -894,7 +1027,7 @@
       rules.push('[data-hamsoo="rtl"]{text-align:justify !important;}');
     }
     if (ROOT.hasAttribute('data-hamsoo-measure')) {
-      rules.push('[data-hamsoo="rtl"]:not(td):not(th){max-width:var(--hamsoo-measure, 70ch) !important;}');
+      rules.push('[data-hamsoo="rtl"]:not(td):not(th):not(pre):not(code){max-width:var(--hamsoo-measure, 70ch) !important;}');
     }
     return rules.join('\n');
   }
@@ -1089,6 +1222,7 @@
   // Strip every trace of the extension from a document or shadow root.
   function cleanTree(root) {
     restoreDigits(root, 'tree');
+    restoreBareLTRRuns(root, 'tree');
     for (const el of root.querySelectorAll('[data-hamsoo-dir]')) restoreEditableDir(el);
     // "Fix this selection" writes inline !important direction styles straight
     // onto the page. They used to be permanent: nothing recorded them, so
@@ -1096,14 +1230,28 @@
     // with no way back short of a reload. The marker attribute lets teardown
     // undo exactly what was applied, and nothing else.
     for (const el of root.querySelectorAll('[data-hamsoo-fix]')) {
-      el.style.removeProperty('direction');
-      el.style.removeProperty('text-align');
-      el.style.removeProperty('unicode-bidi');
-      // Only strip dir= if the fix added it; if the site had its own value the
-      // marker carries it, because the fix overwrote it with dir="rtl".
-      const fix = el.getAttribute('data-hamsoo-fix');
-      if (fix === 'dir') el.removeAttribute('dir');
-      else if (fix && fix.startsWith('keep:')) el.setAttribute('dir', fix.slice(5));
+      const raw = el.getAttribute('data-hamsoo-fix');
+      let prior = null;
+      if (raw && raw.charAt(0) === '{') {
+        try { prior = JSON.parse(raw); } catch (_) { prior = null; }
+      }
+      if (prior && typeof prior === 'object') {
+        const restoreProp = (name, snap) => {
+          if (snap && snap[0]) el.style.setProperty(name, snap[0], snap[1] || '');
+          else el.style.removeProperty(name);
+        };
+        restoreProp('direction', prior.direction);
+        restoreProp('text-align', prior.textAlign);
+        restoreProp('unicode-bidi', prior.unicodeBidi);
+        if (prior.dir == null || prior.dir === '') el.removeAttribute('dir');
+        else el.setAttribute('dir', prior.dir);
+      } else {
+        el.style.removeProperty('direction');
+        el.style.removeProperty('text-align');
+        el.style.removeProperty('unicode-bidi');
+        if (raw === 'dir') el.removeAttribute('dir');
+        else if (raw && raw.startsWith('keep:')) el.setAttribute('dir', raw.slice(5));
+      }
       el.removeAttribute('data-hamsoo-fix');
     }
     for (const el of root.querySelectorAll('[data-hamsoo], [data-hamsoo-box]')) {
@@ -1150,7 +1298,11 @@
     // Reset the per-element cache so font/size/digit changes re-apply to
     // already-rendered elements on the next scan.
     textCache = new WeakMap();
-    extraSelector = extraSelectorFor(settings);
+    const nextExtra = extraSelectorFor(settings);
+    if (extraSelector && extraSelector !== nextExtra) {
+      unstyleDroppedSelectors(extraSelector, nextExtra);
+    }
+    extraSelector = nextExtra;
 
     if (!active) {
       syncShadowStyles();

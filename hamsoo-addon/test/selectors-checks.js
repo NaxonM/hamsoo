@@ -38,6 +38,18 @@
   check('invalid stored selector does not break scanning', () =>
     document.getElementById('lightP').getAttribute('data-hamsoo') === 'rtl');
 
+  window.__push({
+    lang: 'en',
+    enabled: true,
+    fontEnabled: true,
+    readabilityEnabled: true,
+    customSelectors: {}
+  });
+  await new Promise(r => setTimeout(r, 400));
+
+  check('removing a picked selector unstyles the element', () =>
+    document.getElementById('picked').getAttribute('data-hamsoo') === null);
+
   const json = JSON.stringify(results);
   document.title = 'HAMSOO_RESULTS:' + btoa(unescape(encodeURIComponent(json)));
 })();

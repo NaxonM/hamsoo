@@ -107,6 +107,39 @@
     return true;
   });
 
+  const fixStyled = document.createElement('p');
+  fixStyled.id = 'fixStyled';
+  fixStyled.textContent = 'Hello world';
+  fixStyled.style.setProperty('direction', 'ltr');
+  fixStyled.style.setProperty('text-align', 'center');
+  document.body.appendChild(fixStyled);
+  fixStyled.setAttribute('data-hamsoo-fix', JSON.stringify({
+    dir: null,
+    direction: ['ltr', ''],
+    textAlign: ['center', ''],
+    unicodeBidi: null
+  }));
+  fixStyled.setAttribute('dir', 'rtl');
+  fixStyled.style.setProperty('direction', 'rtl', 'important');
+  fixStyled.style.setProperty('text-align', 'start', 'important');
+  fixStyled.style.setProperty('unicode-bidi', 'isolate', 'important');
+  window.__push(withOverride({ enabled: false }));
+  await wait(700);
+
+  check('undoing a selection fix restores original inline styles', () => {
+    const el = document.getElementById('fixStyled');
+    if (el.hasAttribute('data-hamsoo-fix')) throw new Error('marker attribute left behind');
+    if (el.hasAttribute('dir')) throw new Error('dir left behind');
+    if (el.style.getPropertyValue('direction') !== 'ltr') {
+      throw new Error('author direction came back as ' + JSON.stringify(el.style.getPropertyValue('direction')));
+    }
+    if (el.style.getPropertyValue('text-align') !== 'center') {
+      throw new Error('author text-align came back as ' + JSON.stringify(el.style.getPropertyValue('text-align')));
+    }
+    if (el.style.getPropertyValue('unicode-bidi')) throw new Error('unicode-bidi left behind');
+    return true;
+  });
+
   check('disabling removes every data-hamsoo attribute from <html>', () => {
     const left = hamsooAttrs();
     if (left.length) throw new Error('stranded: ' + left.join(', '));

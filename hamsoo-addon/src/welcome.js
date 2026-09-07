@@ -94,8 +94,7 @@
     // rather than flipping to it after the async storage read.
     try { localStorage.setItem('hamsoo-lang', pref); } catch (e) { /* private mode */ }
     // The tour still writes no settings of its own: the background owns the
-    // persist funnel (schema, syncVersion bump, storage.sync mirror). Writing
-    // storage from here would be a second writer, and the two would drift.
+    // persist funnel. Writing storage from here would be a second writer.
     if (hasAPI && api.runtime && api.runtime.sendMessage) {
       try { api.runtime.sendMessage({ type: 'HAMSOO_SET_LANG', lang: pref }); } catch (e) { /* no receiver */ }
     }

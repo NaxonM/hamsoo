@@ -27,6 +27,7 @@ const EXPECTED_CHECKS = [
   'disabling detaches injected styling from shadow roots',
   'disabling undoes a context-menu selection fix',
   'undoing a selection fix keeps the page\u2019s own dir attribute',
+  'undoing a selection fix restores original inline styles',
   're-enabling restores marks and digits',
   're-enabling restores styling and marks inside shadow roots'
 ];

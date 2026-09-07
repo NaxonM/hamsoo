@@ -4,9 +4,13 @@ Operational guide for anyone — human or AI — working on Hamsoo. It explains 
 project is put together, which commands are authoritative, and the traps that have
 already cost real debugging time.
 
-Read this before editing. Then read [`docs/DEBUGGING-REPORT.md`](docs/DEBUGGING-REPORT.md),
-which is the regression ledger: source comments across the code base cite its
-R-numbers (R1-R6) instead of repeating the reasoning inline.
+Read this before editing. Then read [`docs/HANDOVER.md`](docs/HANDOVER.md) and
+[`docs/GROUND-TRUTH.md`](docs/GROUND-TRUTH.md). Those are the **current** source of
+truth for remaining work (H-items from the 7 Sep 2026 audit; cloud sync was later removed).
+
+[`docs/DEBUGGING-REPORT.md`](docs/DEBUGGING-REPORT.md) is the **historical**
+regression ledger: source comments cite its R-numbers (R1–R6). Do not treat its
+pre-1.3.0 narrative, or anything under `docs/archive/`, as the open-bug list.
 
 ---
 
@@ -45,7 +49,11 @@ R-numbers (R1-R6) instead of repeating the reasoning inline.
 │   ├── logo.png
 │   └── screenshots/          comparison, comparison-stacked, popup, popup-dark, options, fonts
 ├── docs/
-│   └── DEBUGGING-REPORT.md   TRACKED. Regression ledger + standing rules.
+│   ├── README.md             Doc index. Start here for current vs historical.
+│   ├── HANDOVER.md           Instructions for the implementing agent.
+│   ├── GROUND-TRUTH.md       Current open issues after the storage.sync purge.
+│   ├── DEBUGGING-REPORT.md   Historical R1–R6 ledger. Source comments cite it.
+│   └── archive/              Superseded B-series audits. Not current work.
 ├── dev/                      GITIGNORED. Internal harnesses and image tooling. Never ships.
 └── hamsoo-addon/
     ├── package.json          Version source of truth. npm scripts live here.
@@ -54,7 +62,7 @@ R-numbers (R1-R6) instead of repeating the reasoning inline.
     ├── CHANGELOG.md
     ├── LICENSE               Copied into dist/ by build.js (AGPL requirement).
     ├── src/                  The extension itself.
-    ├── test/                 PUBLISHED test suite. 217 tests.
+    ├── test/                 PUBLISHED test suite. Count lives in `test/run.js` (311 passing after H11 & H14; git publishability skipped without `.git`).
     ├── scripts/              check, build helpers, zip, preview, bump-version,
     │                         version-sites (the version registry), release-notes
     └── website/              Project website, deployed to GitHub Pages.
@@ -67,7 +75,8 @@ R-numbers (R1-R6) instead of repeating the reasoning inline.
 | `hamsoo-addon/test/`, `scripts/` | tracked | Published test suite. CI runs it. |
 | `dev/` | ignored | Internal debugging instruments. Deliberately not shipped. |
 | `assets/` | tracked | GitHub must serve these or the READMEs show broken images. |
-| `docs/DEBUGGING-REPORT.md` | tracked | Source comments cite it; ignoring it broke those references. |
+| `docs/DEBUGGING-REPORT.md` | tracked | Source comments cite R1–R6; ignoring it broke those references. |
+| `docs/HANDOVER.md`, `docs/GROUND-TRUTH.md` | tracked | Current open work. Supersedes archive reports. |
 | `hamsoo-addon/preview-shots/` | ignored | Raw generated output. Publish via `assets/` instead (§5). |
 | `dist/`, `*.zip`, `node_modules/` | ignored | Build output. |
 | `RELEASE-*.md`, `STORE-LISTING.md` | ignored | Internal release/marketing copy. |
@@ -84,7 +93,7 @@ From the repository root (forwards into the add-on):
 
 ```bash
 npm run check      # syntax, JSON, manifest and i18n parity validation
-npm test           # 217 tests, headless Chromium
+npm test           # registered suite, headless Chromium
 npm run build      # writes dist/hamsoo-chromium and dist/hamsoo-firefox
 npm run verify     # check + build + test. THE gate before any commit.
 npm run preview    # UI screenshots into hamsoo-addon/preview-shots/
@@ -100,7 +109,7 @@ cd hamsoo-addon && node scripts/bump-version.js <major.minor.patch>
 ```
 
 `npm run verify` must print `check OK`, `build OK` (twice — once per target), and
-`217 passed, 0 failed`. Treat anything else as a failure, including a zero exit code with
+`315 passed, 0 failed` (or `311 passed, 0 failed` outside git). Treat anything else as a failure, including a zero exit code with
 unexpected output.
 
 That count is a live number, not decoration: it is the figure the READMEs quote. If you add or
@@ -109,7 +118,7 @@ commit, or the three drift apart the way the version numbers once did (§6).
 
 Four of those are the `publishable` group, which asks `git check-ignore` what a fresh clone
 would actually contain. Outside a git repository (a tarball, a vendored copy) they skip with a
-printed note and the run reports 213. That is expected; CI always has git.
+printed note and the run reports 311. That is expected; CI always has git.
 
 ---
 
@@ -305,12 +314,13 @@ not been shown to guard anything.
 
 ## 9. Known open items
 
-- **Bidi in bare text nodes — still open as of 1.3.0.** An LTR sentence sitting as a bare text
-  node inside an RTL paragraph still has its trailing punctuation thrown to the wrong end.
-  Element-level classification cannot reach it. The planned approach is LRI/PDI isolation of
-  every LTR run, with a WeakMap for restore, observer-loop safety, and `code`/`pre` skipped.
-- **Selector drift is the most likely real-world failure.** Chat sites change their DOM
-  frequently. When a site breaks, that is the first thing to check.
+**Authoritative list:** [`docs/GROUND-TRUTH.md`](docs/GROUND-TRUTH.md) (all H01–H15 items resolved).
+Implement via [`docs/HANDOVER.md`](docs/HANDOVER.md). Do not use `docs/archive/` as a backlog.
+
+Still true:
+
+- **Selector drift is the most likely real-world failure** after H01–H15. Chat sites change
+  their DOM frequently. When a site breaks, check selectors first.
 - `welcome.png` is embedded by `README.md` but has no `publish-assets.mjs` slot (§5c).
 
 ---
@@ -319,7 +329,8 @@ not been shown to guard anything.
 
 | Question | File |
 | :--- | :--- |
-| Why is this code written this way? | `docs/DEBUGGING-REPORT.md` (R1-R6, standing rules) |
+| What should I implement next? | `docs/HANDOVER.md` then `docs/GROUND-TRUTH.md` (H01–H15) |
+| Why is this historical code written this way? | `docs/DEBUGGING-REPORT.md` (R1–R6 only) |
 | What changed for users? | `hamsoo-addon/CHANGELOG.md` |
 | How do I contribute? | `.github/CONTRIBUTING.md` |
 | How do I report a vulnerability? | `.github/SECURITY.md` |

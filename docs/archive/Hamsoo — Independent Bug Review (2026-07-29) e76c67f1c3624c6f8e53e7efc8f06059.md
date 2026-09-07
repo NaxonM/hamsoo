@@ -1,3 +1,7 @@
+> **SUPERSEDED.** Historical only. Do not implement from “Status: Open” below.
+> Current work is H01–H15 in [`../GROUND-TRUTH.md`](../GROUND-TRUTH.md) and [`../HANDOVER.md`](../HANDOVER.md).
+> Many B-items here were already fixed in 1.3.0.
+
 # Hamsoo — Independent Bug Review (2026-07-29)
 
 Independent source review of the attached Hamsoo zip. **Did not run the project test suite.** Findings from reading `content.js`, `background.js`, `popup.js`, `settings-util.js`, and related UI scripts.

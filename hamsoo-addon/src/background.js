@@ -164,9 +164,7 @@ async function writeSettings(mutate, options) {
   const result = mutate(settings);
   if (result === false) return null;
   const next = result && typeof result === 'object' ? result : settings;
-  if (!options || options.bump !== false) {
-    next.syncVersion = (typeof next.syncVersion === 'number' ? next.syncVersion : 0) + 1;
-  }
+  if (next && typeof next === 'object') delete next.syncVersion;
   await api.storage.local.set({ settings: next });
   return next;
 }
@@ -185,52 +183,13 @@ async function migrateStoredSettings() {
   }
 }
 
-// Cross-device settings sync: compare storage.sync vs storage.local by syncVersion.
-// The copy with the higher syncVersion counter wins conflicts.
-async function _pullFromSync() {
-  if (!api || !api.storage || !api.storage.sync || !api.storage.local) return;
+// Drop leftover browser-profile copies from the removed storage.sync feature.
+// Local storage is the only settings store; do not read or merge this payload.
+async function discardLegacySyncSettings() {
+  if (!api || !api.storage || !api.storage.sync || typeof api.storage.sync.remove !== 'function') return;
   try {
-    const [localRes, remoteRes] = await Promise.all([
-      api.storage.local.get('settings'),
-      api.storage.sync.get('settings')
-    ]);
-    const local = localRes && localRes.settings && typeof localRes.settings === 'object' ? localRes.settings : {};
-    const remote = remoteRes && remoteRes.settings && typeof remoteRes.settings === 'object' ? remoteRes.settings : {};
-    const localVer = typeof local.syncVersion === 'number' ? local.syncVersion : 0;
-    const remoteVer = typeof remote.syncVersion === 'number' ? remote.syncVersion : 0;
-
-    if (remoteVer > localVer) {
-      const util = globalThis.HamsooUtil;
-      const merged = util && typeof util.mergeSyncedSettings === 'function'
-        ? util.mergeSyncedSettings(local, remote)
-        : Object.assign({}, local, remote);
-      const normalized = util && typeof util.migrateSettings === 'function'
-        ? util.migrateSettings(merged).settings
-        : merged;
-      await api.storage.local.set({ settings: normalized });
-      // Dynamic content-script registration is not derived from storage: it
-      // only runs on install/startup or an explicit popup request. Without
-      // this, custom sites added on another device stay stored-but-inactive
-      // until the next browser restart -- the setting looks applied, and is not.
-      const beforeSites = JSON.stringify(Array.isArray(local.customSites) ? local.customSites : []);
-      const afterSites = JSON.stringify(Array.isArray(normalized.customSites) ? normalized.customSites : []);
-      if (beforeSites !== afterSites) await syncCustomSitesReporting();
-    } else if (localVer > remoteVer) {
-      const util = globalThis.HamsooUtil;
-      const slim = util && typeof util.getSlimSettingsForSync === 'function'
-        ? util.getSlimSettingsForSync(local)
-        : local;
-      await api.storage.sync.set({ settings: slim }).catch(() => {});
-    }
+    await api.storage.sync.remove('settings');
   } catch (_) {}
-}
-
-if (api && api.storage && api.storage.onChanged) {
-  api.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === 'sync') {
-      void _pullFromSync();
-    }
-  });
 }
 
 // Opens the welcome tour exactly once, on a genuine first install.
@@ -272,7 +231,7 @@ async function openWelcomePage() {
 
 api.runtime.onInstalled.addListener(async (details) => {
   await migrateStoredSettings();
-  await _pullFromSync();
+  await discardLegacySyncSettings();
   void setupMenu();
   await syncCustomSitesReporting();
   if (details && details.reason === 'install') await openWelcomePage();
@@ -280,7 +239,7 @@ api.runtime.onInstalled.addListener(async (details) => {
 if (api.runtime.onStartup) {
   api.runtime.onStartup.addListener(async () => {
     await migrateStoredSettings();
-    await _pullFromSync();
+    await discardLegacySyncSettings();
     void setupMenu();
     await syncCustomSitesReporting();
   });
@@ -340,9 +299,8 @@ async function toggleEnabled() {
 // load, so it is written to be cheap: the day key is compared first and storage
 // is only touched on the first hit of a new day.
 //
-// Deliberately NOT routed through persistSettings(): usage days are per-device
-// and excluded from the sync payload, so bumping syncVersion here would start a
-// pointless sync round-trip on every first page load of the day.
+// Usage days are a local engagement fact. The write still goes through the
+// serialized funnel so it cannot clobber a concurrent toggle or language change.
 async function recordUsageDay() {
   const util = globalThis.HamsooUtil;
   if (!util || typeof util.recordUsageDay !== 'function') return;
@@ -392,21 +350,46 @@ api.contextMenus.onClicked.addListener((info, tab) => {
 
 // One-shot fix for any page via the context menu (activeTab permission).
 function fixSelection() {
+  function snapshotProp(element, name) {
+    const value = element.style.getPropertyValue(name);
+    if (!value) return null;
+    return [value, element.style.getPropertyPriority(name)];
+  }
+
   function setRTL(element) {
     if (!(element instanceof HTMLElement)) return;
-    // Record what this fix touched so teardown can undo it. Without a marker
-    // these inline !important styles were permanent for the life of the page.
-    // The marker also carries the site's ORIGINAL dir= value, because this
-    // function overwrites it: remembering only that an attribute existed would
-    // leave the page's own dir="ltr" permanently replaced by our dir="rtl".
+    // Snapshot original dir= AND inline direction styles. Teardown used to
+    // removeProperty() those three names, which also wiped author inline CSS.
     if (!element.hasAttribute('data-hamsoo-fix')) {
-      const priorDir = element.getAttribute('dir');
-      element.setAttribute('data-hamsoo-fix', priorDir === null ? 'dir' : 'keep:' + priorDir);
+      element.setAttribute('data-hamsoo-fix', JSON.stringify({
+        dir: element.getAttribute('dir'),
+        direction: snapshotProp(element, 'direction'),
+        textAlign: snapshotProp(element, 'text-align'),
+        unicodeBidi: snapshotProp(element, 'unicode-bidi')
+      }));
     }
     element.setAttribute('dir', 'rtl');
     element.style.setProperty('direction', 'rtl', 'important');
     element.style.setProperty('text-align', 'start', 'important');
     element.style.setProperty('unicode-bidi', 'isolate', 'important');
+  }
+
+  function intersects(range, node) {
+    try { return range.intersectsNode(node); } catch (_) { return false; }
+  }
+
+  // A wrapper that contains both selected and unselected children must not be
+  // flipped: direction inherits, so styling the common ancestor restyles siblings.
+  function isPartialContainer(el, range) {
+    if (!range || !el || !el.children || el.children.length < 2) return false;
+    let hit = 0;
+    let miss = 0;
+    for (const kid of el.children) {
+      if (intersects(range, kid)) hit += 1;
+      else miss += 1;
+      if (hit && miss) return true;
+    }
+    return false;
   }
 
   const selection = window.getSelection();
@@ -423,15 +406,12 @@ function fixSelection() {
   }
 
   for (const element of targets) {
-    setRTL(element);
+    if (!(range && isPartialContainer(element, range))) setRTL(element);
     if (!element.querySelectorAll) continue;
     const descendants = element.querySelectorAll('p, div, li, span, h1, h2, h3, h4, h5, h6, td, th');
     for (const child of descendants) {
-      // The common ancestor of a selection can be far larger than the selection
-      // itself -- for a range spanning two paragraphs it is often <body>, and
-      // this loop then force-flipped EVERY block on the page. Restrict the walk
-      // to elements the selection actually intersects.
-      if (range && !range.intersectsNode(child)) continue;
+      if (range && !intersects(range, child)) continue;
+      if (range && isPartialContainer(child, range)) continue;
       setRTL(child);
     }
   }
@@ -541,10 +521,8 @@ function startElementPicker(texts) {
     (async () => {
       try {
         // This picker is injected into the PAGE, where the shared settings
-        // helper does not exist. Writing storage directly from here bypassed
-        // the syncVersion bump and the storage.sync mirror, so a picked
-        // selector stayed on one device and was reverted by the next pull.
-        // Hand the write to the background instead, which owns the funnel.
+        // helper does not exist. Writing storage directly from here would be a
+        // second writer racing the background funnel. Hand the write over.
         const reply = await ext.runtime.sendMessage({
           type: 'HAMSOO_ADD_SELECTOR',
           host: location.hostname,
@@ -650,8 +628,31 @@ api.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // The welcome tour offers a language switch, because it opens on install --
   // when 'auto' has usually resolved to English for a Persian-speaking user on
   // an English-language browser. It routes the change through here instead of
-  // writing storage itself, so the shared persist funnel keeps sole ownership of
-  // the syncVersion bump and the storage.sync mirror; two writers would drift.
+  // writing storage itself, so the shared persist funnel keeps sole ownership;
+  // two writers would drift.
+  // Narrow settings mutations from popup/fonts. Never accept a full UI snapshot
+  // as the stored object — full snapshots clobber concurrent edits.
+  if (msg.type === 'HAMSOO_PATCH_SETTINGS') {
+    (async () => {
+      try {
+        const patch = msg.patch && typeof msg.patch === 'object' ? msg.patch : null;
+        if (!patch) {
+          sendResponse({ ok: false, error: 'missing patch' });
+          return;
+        }
+        const next = await writeSettings(settings => {
+          const helper = globalThis.HamsooUtil;
+          if (!helper || typeof helper.applySettingsPatch !== 'function') return false;
+          helper.applySettingsPatch(settings, patch);
+        });
+        sendResponse({ ok: true, settings: next });
+      } catch (error) {
+        sendResponse({ ok: false, error: String(error) });
+      }
+    })();
+    return true;
+  }
+
   if (msg.type === 'HAMSOO_SET_LANG') {
     (async () => {
       try {

@@ -29,7 +29,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
         <label class="switch" data-i18n-attr="title:enableTitle" title="روشن یا خاموش کردن هم‌سو">
-          <input type="checkbox" id="enableToggle" aria-label="فعال کردن هم‌سو">
+          <input type="checkbox" id="enableToggle" data-i18n-attr="aria-label:enableTitle" aria-label="فعال کردن هم‌سو">
           <span class="track" aria-hidden="true"></span>
         </label>
       </div>
@@ -131,14 +131,14 @@
             <h2 data-i18n="sitesTitle">سایت‌ها</h2>
             <span class="count-chip" id="siteCount"></span>
           </div>
-          <div class="site-grid" id="siteGrid" role="group" aria-label="انتخاب سایت‌ها"></div>
+          <div class="site-grid" id="siteGrid" role="group" data-i18n-attr="aria-label:sitesTitle" aria-label="انتخاب سایت‌ها"></div>
         </section>
 
         <section class="card" id="siteScopeCard" hidden>
           <div class="card-head">
             <h2 data-i18n="scopeCardTitle">فقط برای این سایت</h2>
             <label class="switch switch-sm">
-              <input type="checkbox" id="scopeToggle" aria-label="تنظیم جداگانه برای این سایت">
+              <input type="checkbox" id="scopeToggle" data-i18n-attr="aria-label:scopeCardTitle" aria-label="تنظیم جداگانه برای این سایت">
               <span class="track" aria-hidden="true"></span>
             </label>
           </div>
@@ -149,13 +149,13 @@
           <div class="card-head">
             <h2 data-i18n="fontTitle">فونت</h2>
             <label class="switch switch-sm">
-              <input type="checkbox" id="fontToggle" aria-label="اعمال فونت">
+              <input type="checkbox" id="fontToggle" data-i18n-attr="aria-label:fontTitle" aria-label="اعمال فونت">
               <span class="track" aria-hidden="true"></span>
             </label>
           </div>
           <p class="scope-hint" data-i18n="fontHint">فونت فارسی روی متن پاسخ‌ها اعمال می‌شود. اگر فونت خود سایت را بیشتر دوست دارید، خاموش کنید.</p>
           <div class="card-body" id="fontControls">
-            <div class="font-grid" id="fontGrid" role="radiogroup" aria-label="انتخاب فونت"></div>
+            <div class="font-grid" id="fontGrid" role="radiogroup" data-i18n-attr="aria-label:fontTitle" aria-label="انتخاب فونت"></div>
             <button class="link-btn" id="manageFonts" type="button" data-i18n="manageFonts">مدیریت فونت‌های شخصی ←</button>
           </div>
         </section>
@@ -164,7 +164,7 @@
           <div class="card-head">
             <h2 data-i18n="readTitle">خوانایی</h2>
             <label class="switch switch-sm">
-              <input type="checkbox" id="readToggle" aria-label="تنظیم خوانایی">
+              <input type="checkbox" id="readToggle" data-i18n-attr="aria-label:readTitle" aria-label="تنظیم خوانایی">
               <span class="track" aria-hidden="true"></span>
             </label>
           </div>
@@ -213,7 +213,7 @@
           <div class="card-head">
             <h2 data-i18n="digitsTitle">ارقام محلی</h2>
             <label class="switch switch-sm">
-              <input type="checkbox" id="digitsToggle" aria-label="تبدیل ارقام لاتین به ارقام محلی">
+              <input type="checkbox" id="digitsToggle" data-i18n-attr="aria-label:digitsTitle" aria-label="تبدیل ارقام لاتین به ارقام محلی">
               <span class="track" aria-hidden="true"></span>
             </label>
           </div>
@@ -231,7 +231,7 @@
           <div class="card-head">
             <h2 data-i18n="punctTitle">اصلاح نشانه‌گذاری</h2>
             <label class="switch switch-sm">
-              <input type="checkbox" id="punctToggle" aria-label="اصلاح نشانه‌گذاری">
+              <input type="checkbox" id="punctToggle" data-i18n-attr="aria-label:punctTitle" aria-label="اصلاح نشانه‌گذاری">
               <span class="track" aria-hidden="true"></span>
             </label>
           </div>
@@ -245,12 +245,12 @@
             <h2 data-i18n="appearanceTitle">ظاهر</h2>
           </div>
           <div class="card-body appearance">
-            <div class="seg seg-full" id="modeSeg" role="radiogroup" aria-label="حالت نمایش">
+            <div class="seg seg-full" id="modeSeg" role="radiogroup" data-i18n-attr="aria-label:appearanceTitle" aria-label="حالت نمایش">
               <button type="button" role="radio" data-mode="system" data-i18n="modeSystem">سیستم</button>
               <button type="button" role="radio" data-mode="light" data-i18n="modeLight">روشن</button>
               <button type="button" role="radio" data-mode="dark" data-i18n="modeDark">تیره</button>
             </div>
-            <div class="accents" id="accentRow" role="radiogroup" aria-label="رنگ زمینه">
+            <div class="accents" id="accentRow" role="radiogroup" data-i18n-attr="aria-label:accentLabel" aria-label="رنگ زمینه">
               <button type="button" role="radio" class="accent accent-blue" data-accent="blue" data-i18n-attr="title:accentBlue;aria-label:accentBlue" title="آبی" aria-label="آبی"></button>
               <button type="button" role="radio" class="accent accent-teal" data-accent="teal" data-i18n-attr="title:accentTeal;aria-label:accentTeal" title="سبزآبی" aria-label="سبزآبی"></button>
               <button type="button" role="radio" class="accent accent-violet" data-accent="violet" data-i18n-attr="title:accentViolet;aria-label:accentViolet" title="بنفش" aria-label="بنفش"></button>
@@ -263,7 +263,7 @@
           <div class="card-head">
             <h2 data-i18n="langTitle">زبان</h2>
           </div>
-          <div class="seg seg-full" id="langSeg" role="radiogroup" aria-label="زبان رابط">
+          <div class="seg seg-full" id="langSeg" role="radiogroup" data-i18n-attr="aria-label:langTitle" aria-label="زبان رابط">
             <button type="button" role="radio" data-lang="auto" data-i18n="langAuto">خودکار</button>
             <button type="button" role="radio" data-lang="fa" data-i18n="langFa">فارسی</button>
             <button type="button" role="radio" data-lang="en" data-i18n="langEn">English</button>
@@ -375,9 +375,6 @@
       <div class="footer-meta">
         <a class="made-with" href="https://github.com/NaxonM/hamsoo" target="_blank" rel="noopener noreferrer" data-i18n="madeWith">ساخته‌شده با ❤️ توسط NaxonM</a>
         <span class="save-state" id="saveState" aria-live="polite"></span>
-      </div>
-      <div class="sync-row" id="syncRow" hidden>
-        <span id="syncStatus" class="sync-status" aria-live="polite"></span>
       </div>
     </footer>
   </div>

@@ -83,11 +83,13 @@ const DEFAULTS = Object.freeze({
   shortcutIsGlobal: true,
   // Read from the shared util rather than restated, so DEFAULTS can never claim
   // an older schema than the one migrate/normalize actually write.
-  schemaVersion: HamsooUtil.SCHEMA_VERSION,
-  syncVersion: 0
+  schemaVersion: HamsooUtil.SCHEMA_VERSION
 });
 
 let settings = structuredClone(DEFAULTS);
+// Last storage copy we have acknowledged. save() sends only the keys that
+// differ from this, so a stale popup snapshot cannot overwrite unrelated fields.
+let lastAcked = structuredClone(DEFAULTS);
 let saveTimer = 0;
 let statusTimer = 0;
 let currentTab = null; // { host, origin, pattern, siteKey, isCustom }
@@ -225,29 +227,64 @@ function base64ToBuffer(b64) {
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return bytes.buffer;
 }
-// Single write funnel for the popup: bumps syncVersion and writes both
-// storage areas through the shared helper. Every settings change in the
-// popup goes through this, so local and sync cannot drift apart.
+function cloneSettings(value) {
+  try { return structuredClone(value); } catch (_) {
+    return JSON.parse(JSON.stringify(value));
+  }
+}
+
+function sendSettingsPatch(patch) {
+  if (!hasAPI || !api.runtime || typeof api.runtime.sendMessage !== 'function') {
+    return Promise.reject(new Error('no runtime'));
+  }
+  const sent = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch });
+  if (sent && typeof sent.then === 'function') return sent;
+  return new Promise((resolve, reject) => {
+    try {
+      api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+        const err = api.runtime && api.runtime.lastError;
+        if (err) reject(new Error(err.message || String(err)));
+        else resolve(res);
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+// Narrow patch through the background. Never write the popup's full in-memory
+// object — that snapshot is what clobbered concurrent edits.
 async function writeSettings() {
   const util = globalThis.HamsooUtil;
-  if (util && typeof util.persistSettings === 'function') {
-    await util.persistSettings(api, settings);
-    return;
+  if (!util || typeof util.diffSettingsFields !== 'function') {
+    throw new Error('settings helper missing');
   }
-  if (util && typeof util.incrementSyncVersion === 'function') {
-    util.incrementSyncVersion(settings);
+  const fields = util.diffSettingsFields(lastAcked, settings);
+  if (!Object.keys(fields).length) return;
+  const ackedAtSend = lastAcked;
+  const res = await sendSettingsPatch({ fields });
+  if (!res || res.ok === false) throw new Error((res && res.error) || 'patch failed');
+  if (res.settings && typeof res.settings === 'object') {
+    const committed = normalize(res.settings);
+    settings = util.rebasePendingSettings(ackedAtSend, settings, committed);
+    lastAcked = cloneSettings(committed);
   }
-  await api.storage.local.set({ settings });
 }
 
 async function persistNow() {
-  if (!hasAPI) return;
+  if (!hasAPI) return false;
   try {
-    await writeSettings();
+    const res = await sendSettingsPatch({ replace: settings });
+    if (!res || res.ok === false) throw new Error((res && res.error) || 'replace failed');
+    if (res.settings && typeof res.settings === 'object') {
+      settings = normalize(res.settings);
+    }
+    lastAcked = cloneSettings(settings);
+    return true;
   } catch (_) {
     setStatus(t('saveError'));
+    return false;
   }
-  renderSyncStatus();
 }
 async function exportSettings() {
   const payload = {
@@ -307,6 +344,11 @@ async function requestImportedSitePermissions() {
 }
 
 async function importSettings(file) {
+  const maxImport = HamsooUtil.MAX_IMPORT_BYTES || (12 * 4 * 1024 * 1024);
+  if (file && typeof file.size === 'number' && file.size > maxImport) {
+    setStatus(t('invalidFile'));
+    return;
+  }
   let data;
   try {
     data = JSON.parse(await file.text());
@@ -314,55 +356,63 @@ async function importSettings(file) {
     setStatus(t('invalidFile'));
     return;
   }
-  const incoming = data && typeof data === 'object' && data.settings && typeof data.settings === 'object'
-    ? data.settings
-    : data;
-  if (!incoming || typeof incoming !== 'object') {
-    setStatus(t('invalidFile'));
+  const parsed = HamsooUtil.recognizeImportedSettings(data);
+  if (!parsed || !parsed.ok) {
+    setStatus(t(parsed && parsed.error === 'unsupportedVersion' ? 'importUnsupported' : 'invalidFile'));
     return;
   }
-  // Remember the local counter before overwriting settings: the file's own
-  // syncVersion must not be trusted.
-  const priorSyncVersion = settings && typeof settings.syncVersion === 'number' ? settings.syncVersion : 0;
+  if (typeof confirm === 'function' && !confirm(t('importConfirm'))) return;
+
+  const previous = cloneSettings(settings);
+  const previousAcked = cloneSettings(lastAcked);
   const maxFonts = HamsooUtil.MAX_CUSTOM_FONTS;
   const maxBytes = HamsooUtil.MAX_FONT_BYTES;
   const acceptedFontIds = new Set();
+  const stagedFontIds = [];
   let skippedFonts = 0;
-  const hadFontPayload = Array.isArray(data.fonts) && Boolean(globalThis.HamsooFontDB);
+  const incomingFonts = Array.isArray(parsed.fonts) ? parsed.fonts : [];
+  const hadFontPayload = incomingFonts.length > 0 && Boolean(globalThis.HamsooFontDB);
   if (hadFontPayload) {
-    for (const font of data.fonts) {
+    for (const font of incomingFonts) {
       if (!font || typeof font.id !== 'string' || typeof font.bytes !== 'string') continue;
-      // Apply the same caps the fonts UI enforces; import bypassed both.
       if (acceptedFontIds.size >= maxFonts) { skippedFonts += 1; continue; }
       let bytes;
       try { bytes = base64ToBuffer(font.bytes); } catch (_) { skippedFonts += 1; continue; }
-      // Trust the decoded length, not the size the file declares.
       const size = bytes && bytes.byteLength ? bytes.byteLength : (Number(font.size) || 0);
       if (size > maxBytes) { skippedFonts += 1; continue; }
+      const sniffed = HamsooUtil.sniffFontFormat ? HamsooUtil.sniffFontFormat(bytes) : '';
+      if (!sniffed) { skippedFonts += 1; continue; }
       try {
         await globalThis.HamsooFontDB.put({
           id: font.id,
           name: typeof font.name === 'string' ? font.name : 'فونت شخصی',
-          format: typeof font.format === 'string' ? font.format : 'woff2',
+          format: sniffed,
           bytes,
           size,
           added: Number(font.added) || Date.now()
         });
         acceptedFontIds.add(font.id);
+        stagedFontIds.push(font.id);
       } catch (_) { skippedFonts += 1; }
     }
   }
-  settings = normalize(incoming);
-  // Drop metadata for fonts that were never actually stored.
+  settings = normalize(parsed.settings);
   if (hadFontPayload) {
     settings.customFonts = settings.customFonts.filter(f => acceptedFontIds.has(f.id));
   }
   settings.customFonts = settings.customFonts.slice(0, maxFonts);
-  // Re-base the counter so a crafted backup cannot dominate every other
-  // device forever; persistNow() bumps this to priorSyncVersion + 1.
-  settings.syncVersion = priorSyncVersion;
+  delete settings.syncVersion;
   const deniedSites = await requestImportedSitePermissions();
-  await persistNow();
+  const saved = await persistNow();
+  if (!saved) {
+    for (const id of stagedFontIds) {
+      try { await globalThis.HamsooFontDB.remove(id); } catch (_) {}
+    }
+    settings = previous;
+    lastAcked = previousAcked;
+    renderAll();
+    return;
+  }
   applyI18n();
   await detectCurrentTab();
   renderAll();
@@ -386,9 +436,7 @@ function normalize(value) {
   const builtinKeys = new Set(BUILTIN_FONTS.map(f => f.key));
   if (font.startsWith(CUSTOM_PREFIX)) {
     const id = font.slice(CUSTOM_PREFIX.length);
-    // A remoteOnly entry is font metadata synced from another device with no
-    // bytes on this one, so it cannot be the active font here.
-    if (!customFonts.some(f => f.id === id && f.remoteOnly !== true)) font = DEFAULTS.font;
+    if (!customFonts.some(f => f.id === id)) font = DEFAULTS.font;
   } else if (!builtinKeys.has(font)) {
     font = DEFAULTS.font;
   }
@@ -460,30 +508,21 @@ function normalize(value) {
     // clock, the recorded usage days, and any "later"/"never" the user had
     // already chosen -- and exports taken from popup state lost them too.
     onboardedVersion: HamsooUtil.normalizeOnboardedVersion(raw.onboardedVersion),
-    support: HamsooUtil.normalizeSupport(raw.support, Date.now()),
-    // syncVersion is a monotonic counter incremented on every user-initiated
-    // save. The background uses it to resolve cross-device conflicts.
-    syncVersion: typeof raw.syncVersion === 'number' && raw.syncVersion >= 0 ? Math.floor(raw.syncVersion) : 0
+    support: HamsooUtil.normalizeSupport(raw.support, Date.now())
   };
 }
 
 function save(immediate = false) {
   clearTimeout(saveTimer);
   const doSave = async () => {
-    // writeSettings() bumps syncVersion and writes storage.local AND
-    // storage.sync, so changes propagate cross-device immediately.
     if (hasAPI) {
       try {
         await writeSettings();
         setStatus(t('saved'));
-        renderSyncStatus();
       } catch (_) {
         setStatus(t('saveError'));
       }
     } else {
-      if (globalThis.HamsooUtil && typeof globalThis.HamsooUtil.incrementSyncVersion === 'function') {
-        globalThis.HamsooUtil.incrementSyncVersion(settings);
-      }
       setStatus(t('saved'));
     }
   };
@@ -500,26 +539,6 @@ function setStatus(text) {
   el.textContent = text;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => { el.textContent = ''; }, 1600);
-}
-
-// Shows storage.sync availability + last-known syncVersion in the options
-// page footer. No-op on the popup (syncStatusEl is absent there).
-function renderSyncStatus() {
-  const el = $('syncStatus');
-  if (!el) return;
-  const hasSyncApi = hasAPI && api.storage && api.storage.sync;
-  if (!hasSyncApi) {
-    el.textContent = t('syncUnavailable');
-    el.className = 'sync-status unavailable';
-    return;
-  }
-  const ver = typeof settings.syncVersion === 'number' ? settings.syncVersion : 0;
-  if (ver === 0) {
-    el.textContent = t('syncReady');
-  } else {
-    el.textContent = t('syncActive') + ' \u00b7 v' + ver;
-  }
-  el.className = 'sync-status active';
 }
 
 /* ---------- theme ---------- */
@@ -688,7 +707,9 @@ async function pushCustomSites() {
 
 async function removeCustomSite(pattern) {
   settings.customSites = settings.customSites.filter(p => p !== pattern);
-  save();
+  // Persist immediately so the open tab hears storage.onChanged and tears down.
+  // A debounced save would leave Hamsoo running until the timer fired.
+  await persistNow();
   if (hasAPI && api.runtime) {
     await pushCustomSites();
   }
@@ -736,7 +757,9 @@ async function removeCustomSelector(hostKey, selector) {
   if (list.length) map[hostKey] = list;
   else delete map[hostKey];
   settings.customSelectors = map;
-  save();
+  // Persist immediately so the open tab hears storage.onChanged and unstyles
+  // the picked element. A debounced save would leave it marked.
+  await persistNow();
   renderPickedElements();
 }
 
@@ -798,11 +821,7 @@ function renderFonts() {
   grid.textContent = '';
   const options = [
     ...BUILTIN_FONTS.map(f => ({ key: f.key, label: (LANG === 'en' && f.labelEn) ? f.labelEn : f.label })),
-    // Fonts that only exist on another device have no face to load here;
-    // offering them would silently do nothing. The fonts manager lists them
-    // separately as unavailable-on-this-device.
     ...settings.customFonts
-      .filter(f => f.remoteOnly !== true)
       .map(f => ({ key: CUSTOM_PREFIX + f.id, label: f.name }))
   ];
   for (const option of options) {
@@ -1234,8 +1253,8 @@ function feedbackMailto(kind) {
   });
 }
 
-// Every resolution writes through the normal save path: a dismissal has to reach
-// storage.sync, or the user gets asked again on their other machine.
+// Every resolution writes through the normal save path so a Later / Never
+// choice survives the next popup open.
 function resolveSupport(mutate) {
   settings.support = mutate(settings.support, Date.now());
   supportStep = 'ask';
@@ -1618,12 +1637,9 @@ function switchView(view) {
     if (h) h.hidden = name !== active;
   }
   const pMain = $('previewMain');
-  const syncRow = $('syncRow');
 
-  // The live preview belongs to the main view only, and the sync row is a
-  // settings-view detail.
+  // The live preview belongs to the main view only.
   if (pMain) pMain.hidden = active !== 'main';
-  if (syncRow) syncRow.hidden = !isSettings;
 
   if (active === 'help') renderHelp();
 
@@ -1633,7 +1649,6 @@ function switchView(view) {
     renderShortcut();
     renderCustomSites();
     renderPickedElements();
-    renderSyncStatus();
   }
 }
 
@@ -1727,17 +1742,24 @@ $('replayWelcomeBtn')?.addEventListener('click', () => {
 });
 
 async function init() {
+  // lastAcked is the last copy we believe is in storage, NOT the normalized UI
+  // object. If we ack the cleaned in-memory shape, a later patch only sends the
+  // field the user touched and leaves duplicate sites / empty overrides on disk.
+  let rawStored = {};
   if (hasAPI) {
     try {
       const res = await api.storage.local.get('settings');
-      settings = normalize(res ? res.settings : null);
+      rawStored = res && res.settings && typeof res.settings === 'object' ? res.settings : {};
+      settings = normalize(rawStored);
     } catch (_) {
+      rawStored = {};
       settings = normalize(null);
     }
   } else {
     // Standalone preview: allow ?mode=dark&accent=teal for design QA.
     settings = normalize(null);
   }
+  lastAcked = cloneSettings(rawStored);
   if (params.get('uimode')) settings.mode = params.get('uimode');
   else if (params.get('mode')) settings.mode = params.get('mode');
   if (params.get('uiaccent')) settings.accent = params.get('uiaccent');
@@ -1776,9 +1798,16 @@ async function init() {
   if (hasAPI && api.storage && api.storage.onChanged) {
     api.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes.settings && changes.settings.newValue) {
-        settings = normalize(changes.settings.newValue);
+        const incomingRaw = changes.settings.newValue;
+        const incoming = normalize(incomingRaw);
+        const util = globalThis.HamsooUtil;
+        if (util && typeof util.rebasePendingSettings === 'function') {
+          settings = util.rebasePendingSettings(lastAcked, settings, incoming);
+        } else {
+          settings = incoming;
+        }
+        lastAcked = cloneSettings(incomingRaw && typeof incomingRaw === 'object' ? incomingRaw : incoming);
         renderAll();
-        renderSyncStatus();
       }
     });
   }
