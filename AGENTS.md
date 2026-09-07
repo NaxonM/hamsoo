@@ -41,8 +41,9 @@ pre-1.3.0 narrative, or anything under `docs/archive/`, as the open-bug list.
 ├── LICENSE                   AGPLv3.
 ├── .gitattributes            Pins LF endings. Do not remove — see R2.
 ├── .github/
-│   ├── workflows/ci.yml      The ONLY CI that runs. GitHub reads .github/ at the root only.
+│   ├── workflows/ci.yml      Checks, builds, and tests on push and pull requests.
 │   ├── workflows/pages.yml   Deploys hamsoo-addon/website on changes to it or release.json.
+│   ├── workflows/release.yml Packages and publishes GitHub releases on tag push.
 │   ├── CONTRIBUTING.md
 │   └── SECURITY.md
 ├── assets/                   TRACKED. Logo + screenshots referenced by the READMEs.
