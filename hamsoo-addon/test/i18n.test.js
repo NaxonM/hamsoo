@@ -26,7 +26,7 @@ test('i18n has no duplicate keys', () => {
   }
 });
 
-test('Phase 9 typography keys present in both languages', () => {
+test('typography keys present in both languages', () => {
   const fa = dict('fa');
   const en = dict('en');
   for (const key of ['alignLabel', 'alignStart', 'alignJustify', 'widthLabel', 'widthOff', 'widthNarrow', 'widthMedium', 'widthWide']) {

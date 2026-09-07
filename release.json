@@ -1,14 +1,14 @@
 {
   "name": "Hamsoo",
-  "version": "1.3.0",
-  "tag": "v1.3.0",
-  "date": "2026-07-29",
+  "version": "1.4.0",
+  "tag": "v1.4.0",
+  "date": "2026-09-07",
   "license": "AGPL-3.0-or-later",
   "repository": "https://github.com/NaxonM/hamsoo",
   "homepage": "https://naxonm.github.io/hamsoo",
   "downloads": {
-    "chromium": "https://github.com/NaxonM/hamsoo/releases/download/v1.3.0/hamsoo-chromium.zip",
+    "chromium": "https://github.com/NaxonM/hamsoo/releases/download/v1.4.0/hamsoo-chromium.zip",
     "firefox": "https://addons.mozilla.org/en-US/firefox/addon/hamsoo-%D9%87%D9%85-%D8%B3%D9%88/",
-    "firefox_github": "https://github.com/NaxonM/hamsoo/releases/download/v1.3.0/hamsoo-firefox.zip"
+    "firefox_github": "https://github.com/NaxonM/hamsoo/releases/download/v1.4.0/hamsoo-firefox.zip"
   }
 }

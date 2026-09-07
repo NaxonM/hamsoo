@@ -1,8 +1,41 @@
 # Changelog
 
+## [1.4.0] - 2026-09-07
+
+Serialized settings writes, strict backup validation, improved teardown, and punctuation alignment for mixed-language text.
+
+### Highlights
+
+- Embedded Latin text runs in RTL paragraphs now keep trailing punctuation at the correct side.
+- Settings writes are serialized so concurrent popup and options edits do not overwrite each other.
+- Settings backups are strictly validated on import with automatic rollback on storage failure.
+- Custom site and element removals now immediately unstyle matching elements in open tabs.
+- Selection fix no longer styles unselected sibling elements, and teardown faithfully restores original author styling.
+- Custom fonts are validated with magic-byte format checking.
+
+### Added
+
+- **Format validation for custom fonts.** Uploaded fonts are now verified via format magic bytes (TTF, OTF, WOFF, WOFF2) before saving.
+- **Immediate live element unstyling.** When a custom selector or custom site is removed in settings, open tabs immediately tear down and restore the original DOM state.
+- **Backup import validation.** Importing an empty or unrecognized JSON file is rejected with a clear error and cannot silently reset preferences.
+- **Embedded text punctuation isolation.** Latin phrases sitting directly in Persian paragraphs are isolated so punctuation stays glued to the phrase instead of jumping to the wrong margin.
+
+### Fixed
+
+- **Settings write collisions.** Simultaneous updates between popup cards and background tasks no longer race or overwrite each other.
+- **Selection fix partial containers.** Right-clicking to fix a selection inside a shared container no longer force-flips unselected sibling elements.
+- **Teardown style restoration.** Disabling Hamsoo or undoing a selection fix restores the page's exact prior inline styles rather than removing them outright.
+- **Keyboard navigation for custom fonts.** The font upload dropzone is now fully reachable and operable via keyboard.
+- **Screen reader labels.** Added localized accessibility labels across popup switches and segmented controls in English, Persian, and Arabic.
+
+### Changed
+
+- **Local-first settings storage.** Settings are managed reliably in local storage with export/import files for cross-device transfer.
+
 This file is written for people who use Hamsoo. It is also the source of the release notes on
 GitHub and the "what's new" text in the store listings, so it describes what changed for you,
 not how it was built.
+
 
 ## [1.3.0] - 2026-07-30
 

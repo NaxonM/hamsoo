@@ -269,7 +269,7 @@ test('persistSettings writes local storage and never touches storage.sync', asyn
   assert.equal(payload.syncVersion, undefined, 'leftover counters are stripped');
 });
 
-/* ---------- Phase 3: the serialized write funnel ---------- */
+/* ---------- Serialized write funnel ---------- */
 
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
@@ -369,7 +369,7 @@ test('persistSettings ignores leftover sync options and still never mirrors', as
   assert.equal(mirrored, false, 'nothing is mirrored to storage.sync');
 });
 
-/* ---------- Phase 2: feedback ask ---------- */
+/* ---------- Feedback ask ---------- */
 
 // A profile that satisfies every condition, so each test can break exactly one.
 function eligibleSettings(now) {
@@ -597,7 +597,7 @@ test('buildFeedbackMailto writes the details in a fixed order', () => {
 test('buildFeedbackMailto only ever sends whitelisted details', () => {
   // Hamsoo promises nothing leaves the device unread by the user, so an extra
   // key must not be able to smuggle itself into an outgoing message.
-  // 'settings' became an allowed field in Phase 3, but only as the short digest
+  // 'settings' is an allowed field, but only as the short digest
   // built by settingsDigest() -- never a raw settings blob, which is why the
   // bait below is a full JSON dump under an unlisted key.
   const url = util.buildFeedbackMailto({
