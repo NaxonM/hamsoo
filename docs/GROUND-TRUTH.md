@@ -5,7 +5,7 @@
 **Baseline (unpatched zip):** `npm run check` OK; `npm test` **276 passed, 0 failed** (git publishability tests skipped; zip has no `.git`). Regenerated `dist/` matched the archive.
 
 **Implementation status:** `storage.sync` purged. All H-items resolved: **H01, H02, H04, H05, H08, H09, H10, H11, H12, H13, H14, H15** done; H03, H06, H07 cancelled with cloud sync.
-**Tests:** `npm run check` OK; `npm test` **311 passed, 0 failed** (git publishability skipped without `.git`; 315 in git). i18n 175 keys.
+**Tests:** `npm run check` OK; `npm test` **323 passed, 0 failed** (git publishability skipped without `.git`; 327 in git). i18n 175 keys.
 
 This file is the **only** current open-issue list. Detailed reproduction, root cause, fix steps, and regression gates live in the Notion audit (see `HANDOVER.md`). Older B1–B44 / “Status: Open” text in `docs/archive/` is not current.
 

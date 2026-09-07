@@ -98,38 +98,11 @@
   const LATIN_LETTER_RE = new RegExp(LATIN_LETTER_CLASS);
   const LATIN_LETTER_RE_G = new RegExp(LATIN_LETTER_CLASS, 'g');
 
-  // Bare Latin text runs inside RTL prose. In a block with dir="rtl",
-  // neutral punctuation at the end of an English run (colons, dots, quotes)
-  // inherits the RTL base and jumps to the wrong end of the line.
-  // Matches from the first Latin letter up to any RTL character or digit.
-  const RTL_CHAR_CLASS = '[\\u0590-\\u08FF\\uFB1D-\\uFDFF\\uFE70-\\uFEFF]';
-  const LTR_RUN_RE_G = new RegExp(LATIN_LETTER_CLASS + '[^' + RTL_CHAR_CLASS.slice(1) + '*', 'g');
-
-  // Delimiter balance: in a Persian sentence like "یک پروسه (process) باز می‌کند",
-  // a naive run match would greedily swallow the closing paren and leave the
-  // opening paren outside, flipping them to "()process". Peel off any trailing
-  // closing brackets or quotes that lack a matching opener inside the run so
-  // surrounding punctuation stays in the parent RTL context.
-  const UNPAIRED_PAIRS = { ')': '(', ']': '[', '}': '{', '"': '"', "'": "'", '»': '«', '”': '“', '’': '‘' };
-  function trimUnpairedTrailing(s) {
-    let end = s.length;
-    while (end > 0) {
-      const ch = s.charAt(end - 1);
-      if (UNPAIRED_PAIRS[ch]) {
-        const opener = UNPAIRED_PAIRS[ch];
-        const sub = s.slice(0, end);
-        const openCount = (sub.match(new RegExp('\\' + opener, 'g')) || []).length;
-        if (opener === ch) {
-          if (openCount % 2 !== 0) { end -= 1; continue; }
-        } else {
-          const closeCount = (sub.match(new RegExp('\\' + ch, 'g')) || []).length;
-          if (closeCount > openCount) { end -= 1; continue; }
-        }
-      }
-      break;
-    }
-    return s.slice(0, end);
-  }
+  // Delimiter-aware LTR boundary planner. Pure function returning ordered,
+  // non-overlapping {start, end, text} slices for Latin runs embedded in RTL prose.
+  // Preserves balanced brackets, quotes, and German/English sentence-final punctuation
+  // without swallowing enclosing parentheticals, colons, or section separators (H11).
+  const planLTRIsolates = (globalThis.HamsooUtil && globalThis.HamsooUtil.planLTRIsolates) || function() { return []; };
 
   // How much of an element's lettered content needs to be RTL before a block
   // whose FIRST strong character is Latin is still treated as RTL. This is the
@@ -707,19 +680,8 @@
     for (const node of nodes) {
       const text = node.nodeValue;
       if (!LATIN_LETTER_RE.test(text)) continue;
-      LTR_RUN_RE_G.lastIndex = 0;
 
-      const pieces = [];
-      let m;
-      while ((m = LTR_RUN_RE_G.exec(text))) {
-        const run = m[0];
-        const start = m.index;
-        const sp = /\s+$/.exec(run);
-        const len = sp ? run.length - sp[0].length : run.length;
-        const cleanRun = trimUnpairedTrailing(run.slice(0, len));
-        if (!cleanRun) continue;
-        pieces.push({ start, end: start + cleanRun.length, text: cleanRun });
-      }
+      const pieces = planLTRIsolates(text);
       if (!pieces.length) continue;
 
       const frag = document.createDocumentFragment();

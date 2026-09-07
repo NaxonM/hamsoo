@@ -45,6 +45,7 @@ Desktop.ini
 # Internal release instructions & store listings
 RELEASE-*.md
 /STORE-LISTING.md
+/HAMSOO-*.md
 
 # Internal release instructions stay private, but docs/DEBUGGING-REPORT.md is
 # published on purpose: source comments and CONTRIBUTING.md cite its R-numbers,

@@ -784,6 +784,189 @@
     return '';
   }
 
+  const RTL_LETTER_CLASS = '[\\u0590-\\u05FF\\u0600-\\u065F\\u066A-\\u06EF\\u06FA-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]';
+  const RTL_LETTER_RE = new RegExp(RTL_LETTER_CLASS);
+  const LATIN_LETTER_CLASS = '[A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F]';
+  const LATIN_LETTER_RE = new RegExp(LATIN_LETTER_CLASS);
+
+  function isWordApostrophe(text, i) {
+    const ch = text[i];
+    if (ch !== "'" && ch !== '\u2019') return false;
+    return (
+      i > 0 &&
+      i < text.length - 1 &&
+      LATIN_LETTER_RE.test(text[i - 1]) &&
+      LATIN_LETTER_RE.test(text[i + 1])
+    );
+  }
+
+  function planLTRIsolates(text) {
+    if (!text || typeof text !== 'string') return [];
+    if (!LATIN_LETTER_RE.test(text)) return [];
+
+    const BRACKET_OPEN = { '(': ')', '[': ']', '{': '}', '\u00AB': '\u00BB', '\u201C': '\u201D', '\u2018': '\u2019' };
+    const BRACKET_CLOSE = { ')': '(', ']': '[', '}': '{', '\u00BB': '\u00AB', '\u201D': '\u201C', '\u2019': '\u2018' };
+
+    // Treat whitespace-delimited section separators as boundaries (e.g. ` — `, ` – `, ` -- `)
+    const isSepIndex = new Set();
+    const SEP_RE = /\s+[—–-]+\s*|\s*[—–-]+\s+/g;
+    let sm;
+    while ((sm = SEP_RE.exec(text))) {
+      for (let sIdx = sm.index; sIdx < sm.index + sm[0].length; sIdx++) {
+        isSepIndex.add(sIdx);
+      }
+    }
+
+    // 1. Match bracket & quote pairs across the entire text node.
+    const stack = [];
+    const pairs = [];
+    const unmatchedOpen = new Set();
+    const unmatchedClose = new Set();
+
+    let straightDoubleOpen = -1;
+    let straightSingleOpen = -1;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      // In-word apostrophes like Let's are letters, not quotes
+      if (isWordApostrophe(text, i)) {
+        continue;
+      }
+
+      // Straight double quote
+      if (ch === '"') {
+        if (straightDoubleOpen >= 0) {
+          pairs.push({ open: straightDoubleOpen, close: i });
+          straightDoubleOpen = -1;
+        } else {
+          straightDoubleOpen = i;
+        }
+        continue;
+      }
+
+      // Straight single quote
+      if (ch === "'") {
+        if (straightSingleOpen >= 0) {
+          pairs.push({ open: straightSingleOpen, close: i });
+          straightSingleOpen = -1;
+        } else {
+          straightSingleOpen = i;
+        }
+        continue;
+      }
+
+      // Typed bracket / directional quote
+      if (BRACKET_OPEN[ch]) {
+        stack.push({ ch, index: i });
+      } else if (BRACKET_CLOSE[ch]) {
+        if (stack.length > 0 && stack[stack.length - 1].ch === BRACKET_CLOSE[ch]) {
+          const op = stack.pop();
+          pairs.push({ open: op.index, close: i });
+        } else {
+          unmatchedClose.add(i);
+        }
+      }
+    }
+
+    for (const item of stack) {
+      unmatchedOpen.add(item.index);
+    }
+    if (straightDoubleOpen >= 0) unmatchedOpen.add(straightDoubleOpen);
+    if (straightSingleOpen >= 0) unmatchedOpen.add(straightSingleOpen);
+
+    // Identify whether each pair encloses RTL characters and whether it has preceding Latin.
+    for (const p of pairs) {
+      const inner = text.slice(p.open + 1, p.close);
+      p.enclosesRTL = RTL_LETTER_RE.test(inner);
+
+      if (p.enclosesRTL) {
+        p.isInternal = false;
+        continue;
+      }
+
+      // Look backwards from open delimiter:
+      // If we hit a Latin letter without intervening RTL or section separator, it's internal.
+      let hasPrecedingLatin = false;
+      for (let j = p.open - 1; j >= 0; j--) {
+        if (isSepIndex.has(j) || RTL_LETTER_RE.test(text[j])) break;
+        if (LATIN_LETTER_RE.test(text[j])) {
+          hasPrecedingLatin = true;
+          break;
+        }
+      }
+      p.isInternal = hasPrecedingLatin;
+    }
+
+    // Build hard boundary set: any character position that cannot be inside an isolate
+    const hardBoundaries = new Set();
+    unmatchedOpen.forEach((idx) => hardBoundaries.add(idx));
+    unmatchedClose.forEach((idx) => hardBoundaries.add(idx));
+    for (const pr of pairs) {
+      if (pr.enclosesRTL || !pr.isInternal) {
+        hardBoundaries.add(pr.open);
+        hardBoundaries.add(pr.close);
+      }
+    }
+    isSepIndex.forEach((idx) => hardBoundaries.add(idx));
+
+    // 2. Identify candidate segments between hard boundaries and RTL characters
+    const candidates = [];
+    let curStart = -1;
+
+    for (let cIdx = 0; cIdx <= text.length; cIdx++) {
+      const isEnd = (cIdx === text.length);
+      const cCh = isEnd ? '' : text[cIdx];
+      const isBoundary = isEnd || hardBoundaries.has(cIdx) || RTL_LETTER_RE.test(cCh);
+
+      if (isBoundary) {
+        if (curStart >= 0) {
+          candidates.push({ start: curStart, end: cIdx });
+          curStart = -1;
+        }
+      } else {
+        if (curStart < 0) curStart = cIdx;
+      }
+    }
+
+    // 3. Refine each candidate:
+    const isolates = [];
+
+    for (const cand of candidates) {
+      let s = cand.start;
+      let e = cand.end;
+
+      // Advance s to first Latin letter
+      while (s < e && !LATIN_LETTER_RE.test(text[s])) {
+        s++;
+      }
+      if (s >= e) continue;
+
+      // Trim trailing whitespace
+      while (e > s && /\s/.test(text[e - 1])) {
+        e--;
+      }
+
+      // Trim trailing comma or semicolon if at the very end of candidate
+      while (e > s) {
+        const lastChar = text[e - 1];
+        if (lastChar === ',' || lastChar === ';') {
+          e--;
+          while (e > s && /\s/.test(text[e - 1])) e--;
+          continue;
+        }
+        break;
+      }
+
+      // Final sanity check
+      if (s < e && LATIN_LETTER_RE.test(text.slice(s, e))) {
+        isolates.push({ start: s, end: e, text: text.slice(s, e) });
+      }
+    }
+
+    return isolates;
+  }
+
   return {
     clampSize: clampSize,
     clampLineHeight: clampLineHeight,
@@ -847,5 +1030,6 @@
     isValidCommandShortcut: isValidCommandShortcut,
     describeShortcutLimitation: describeShortcutLimitation,
     isLikelyHostConflict: isLikelyHostConflict,
+    planLTRIsolates: planLTRIsolates,
   };
 });
