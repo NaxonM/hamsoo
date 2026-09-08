@@ -2,19 +2,18 @@
 
 ## [1.4.1] - 2026-09-08
 
-Hotfix release addressing an issue introduced in version 1.4.0 with delimiter and parenthesis handling in mixed-language lists.
+Hotfix release addressing delimiter and parenthesis alignment in mixed-language text.
 
 ### Highlights
 
-- Parentheses and punctuation around Latin words in RTL text now stay in their correct visual positions.
-- Section separators and colons next to bracketed vocabulary terms remain outside the Latin isolate.
-- Dynamic page text updates are preserved cleanly without overwriting host content during digit restoration.
-- Settings removals update targeted site records without overwriting concurrent edits.
+- Parentheses and punctuation around Latin words in RTL text stay in their correct positions.
+- Dynamic page text updates are preserved without overwriting host content during digit restoration.
+- Settings removals update targeted records without overwriting concurrent edits.
 - Font operations and imports use safe rollback to prevent custom font data loss on write failure.
 
 ### Fixed
 
-- **Bidirectional delimiter and parenthesis isolation**: In version 1.4.0, Latin run wrapping in right-to-left blocks inadvertently swallowed outer parentheses, section separators (such as em-dashes), and trailing colons into LTR spans when terms were wrapped in brackets (for example, vocabulary definitions like "مذکر (der):", "(Experten, pl.) — کارشناس", and "(Jungen, pl. — اسم با پایان ضعیف/n-Deklination)"). This caused closing brackets and punctuation to jump to the wrong side of the line. Version 1.4.1 resolves this with a delimiter-aware boundary planner that balances bracket pairs with a stack over the original text, keeps outer parentheses and boundary separators in the surrounding context, and ensures punctuation stays glued to the intended phrase.
+- **Bidirectional delimiter and parenthesis isolation**: Fixed an issue where parentheses, colons, and dashes around Latin words in right-to-left text were pulled into the Latin span, causing brackets to flip or jump to the wrong side. Punctuation and brackets now stay on the intended side.
 - **Dynamic host text updates and digit restoration**: Fixed text restoration so digit localization respects node ownership and does not overwrite newer text updated dynamically by host pages, and ensures mixed paragraphs cleanly restore original digits when Hamsoo is disabled.
 - **Settings persistence concurrency**: Narrowed site and selector removals to update only targeted items without clobbering concurrent background or popup changes.
 - **Transactional font operations**: Font additions, removals, and backup imports now feature transactional rollback to preserve existing custom fonts if persistence fails.
