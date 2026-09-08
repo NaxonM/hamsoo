@@ -39,12 +39,23 @@ jobs:
       - name: Generate release notes
         run: node scripts/release-notes.js > ../RELEASE_NOTES.md
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            dist/hamsoo-chromium.zip \
-            dist/hamsoo-firefox.zip \
-            --title "${{ github.ref_name }}" \
-            --notes-file ../RELEASE_NOTES.md
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} exists; updating notes and assets"
+            gh release edit "${{ github.ref_name }}" \
+              --title "${{ github.ref_name }}" \
+              --notes-file ../RELEASE_NOTES.md
+            gh release upload "${{ github.ref_name }}" \
+              dist/hamsoo-chromium.zip \
+              dist/hamsoo-firefox.zip \
+              --clobber
+          else
+            gh release create "${{ github.ref_name }}" \
+              dist/hamsoo-chromium.zip \
+              dist/hamsoo-firefox.zip \
+              --title "${{ github.ref_name }}" \
+              --notes-file ../RELEASE_NOTES.md
+          fi
