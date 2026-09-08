@@ -381,10 +381,11 @@ function fixSelection() {
   // A wrapper that contains both selected and unselected children must not be
   // flipped: direction inherits, so styling the common ancestor restyles siblings.
   function isPartialContainer(el, range) {
-    if (!range || !el || !el.children || el.children.length < 2) return false;
+    if (!range || !el || !el.childNodes) return false;
     let hit = 0;
     let miss = 0;
-    for (const kid of el.children) {
+    for (const kid of el.childNodes) {
+      if (kid.nodeType === Node.TEXT_NODE && !kid.nodeValue.trim()) continue;
       if (intersects(range, kid)) hit += 1;
       else miss += 1;
       if (hit && miss) return true;

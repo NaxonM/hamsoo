@@ -594,11 +594,10 @@
       acceptNode(node) {
         if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
         const record = originalDigitText.get(node);
-        // Visit a node when it has fresh ASCII digits, or when we already
-        // converted it under a different script and must redo the conversion.
-        const needsConvert = /[0-9]/.test(node.nodeValue);
-        const needsRescript = record !== undefined && record.script !== script;
-        if (!needsConvert && !needsRescript) return NodeFilter.FILTER_REJECT;
+        const hasDigits = /[0-9]/.test(node.nodeValue);
+        const weOwn = record !== undefined && node.nodeValue === record.lastWritten;
+        const needsRescript = weOwn && record.script !== script;
+        if (!hasDigits && !needsRescript) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
         if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [href], [data-hamsoo-run]')) {
           return NodeFilter.FILTER_REJECT;
@@ -611,30 +610,19 @@
     for (let node = walker.nextNode(); node; node = walker.nextNode()) nodes.push(node);
     for (const node of nodes) {
       const record = originalDigitText.get(node);
-      // Re-convert from the pristine original when the script changed;
-      // otherwise the current value is the fresh host-provided text.
-      const source = record !== undefined && record.script !== script && node.nodeValue !== record.text
+      const weOwn = record !== undefined && node.nodeValue === record.lastWritten;
+      const source = (weOwn && record.script !== script)
         ? record.text
         : node.nodeValue;
-      originalDigitText.set(node, { text: source, script });
-      node.nodeValue = source.replace(/[0-9]/g, d => table[d]);
+      const converted = source.replace(/[0-9]/g, d => table[d]);
+      originalDigitText.set(node, { text: source, script, lastWritten: converted });
+      node.nodeValue = converted;
     }
   }
 
   // Undo localizeDigits: restores every text node under el to its recorded
   // pre-conversion value. Turning the setting off is a one-step, lossless
   // revert instead of requiring a page reload.
-  //
-  // `scope` picks between the two callers:
-  //   'block' (default) -- classifier use. Scoped exactly like localizeDigits,
-  //     because a nested block owns its own digits: restoring them from an
-  //     ancestor would undo a nested RTL block's conversion, and the
-  //     text-signature cache would then skip re-classifying it, leaving those
-  //     digits permanently reverted.
-  //   'tree' -- teardown use. cleanTree() must strip every trace of the
-  //     extension from a document or shadow root, so it has to reach nested
-  //     blocks too; scoping it there would leave localized digits behind after
-  //     the user switched Hamsoo off.
   function restoreDigits(el, scope) {
     const wholeTree = scope === 'tree';
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -642,7 +630,9 @@
       if (!wholeTree && inNestedBlock(node, el)) continue;
       const record = originalDigitText.get(node);
       if (record !== undefined) {
-        if (node.nodeValue !== record.text) node.nodeValue = record.text;
+        if (node.nodeValue === record.lastWritten) {
+          node.nodeValue = record.text;
+        }
         originalDigitText.delete(node);
       }
     }
@@ -786,12 +776,18 @@
 
     if (el.closest('pre')) return;
 
-    // Editable fields get their direction hint regardless of what they
-    // currently hold. An empty composer is exactly the moment the user is
-    // about to type into it, which is the case this feature exists for; gating
-    // it behind isRTLBlock() meant it only engaged after enough Persian had
-    // already been typed.
-    if (el.matches(EDITABLE_SELECTOR)) applyEditableDir(el);
+    // Editable fields get direction assistance when enabled. When disabled,
+    // restore the author dir, remove any Hamsoo direction mark, and exit early
+    // so direction: rtl !important does not override the restored field.
+    if (el.matches(EDITABLE_SELECTOR)) {
+      if (settings.punctuationFixEnabled) {
+        applyEditableDir(el);
+      } else {
+        restoreEditableDir(el);
+        unmark(el);
+        return;
+      }
+    }
 
     // Captured before any mark() call so we can detect a change of ambient
     // direction, not merely the current state.
@@ -804,12 +800,11 @@
     if (isRTLBlock(text) || rtlByContext) {
       mark(el, 'rtl');
       if (!el.matches(EDITABLE_SELECTOR)) {
+        restoreDigits(el);
         restoreBareLTRRuns(el);
         isolateBareLTRRuns(el);
         if (settings.digitsEnabled) {
           localizeDigits(el);
-        } else {
-          restoreDigits(el);
         }
       }
       if (el.matches('td, th, li')) promoteContainer(el);
@@ -935,7 +930,21 @@
         if (newSel) {
           try { if (el.matches(newSel)) continue; } catch (_) { /* keep unmarking */ }
         }
+        try { if (el.matches(SELECTOR)) { classify(el); continue; } } catch (_) {}
+        restoreDigits(el, 'tree');
+        restoreBareLTRRuns(el, 'tree');
+        restoreEditableDir(el);
         unmark(el);
+        for (const child of el.querySelectorAll('[data-hamsoo], [data-hamsoo-run], [data-hamsoo-dir]')) {
+          if ((newSel && child.matches(newSel)) || child.matches(SELECTOR)) {
+            classify(child);
+          } else {
+            restoreDigits(child, 'tree');
+            restoreBareLTRRuns(child, 'tree');
+            restoreEditableDir(child);
+            unmark(child);
+          }
+        }
       }
     }
   }
@@ -1331,34 +1340,6 @@
     }
   }, true);
 
-  // Paste helper: strip stray bidi control characters from text pasted into
-  // plain inputs so the field's stored direction does not get corrupted over
-  // time. Rich contenteditable editors keep their own paste handling untouched.
-  document.addEventListener('paste', event => {
-    if (!settings || !active || !settings.punctuationFixEnabled) return;
-    const target = event.target;
-    if (!(target instanceof HTMLElement) ||
-        !target.matches('textarea, input[type="text"], input[type="search"]')) return;
-    const cd = event.clipboardData;
-    if (!cd) return;
-    const text = cd.getData('text');
-    if (!text || !BIDI_CONTROL_RE.test(text)) return;
-    event.preventDefault();
-    const clean = text.replace(/[\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '');
-    const start = target.selectionStart != null ? target.selectionStart : target.value.length;
-    const end = target.selectionEnd != null ? target.selectionEnd : target.value.length;
-    setNativeValue(target, target.value.slice(0, start) + clean + target.value.slice(end));
-    const pos = start + clean.length;
-    try { target.setSelectionRange(pos, pos); } catch (_) { /* no-op */ }
-    // InputEvent (not a bare Event) with an inputType, so listeners that read
-    // event.inputType -- as React's onChange path and most rich editors do --
-    // recognize this as a real paste rather than ignoring it.
-    target.dispatchEvent(new InputEvent('input', {
-      bubbles: true,
-      inputType: 'insertFromPaste',
-      data: clean
-    }));
-  }, true);
 
   if (hasAPI) {
 

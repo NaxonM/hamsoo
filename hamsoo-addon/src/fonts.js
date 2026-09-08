@@ -57,15 +57,21 @@ function sendSettingsPatch(patch) {
   if (!hasAPI || !api.runtime || typeof api.runtime.sendMessage !== 'function') {
     return Promise.reject(new Error('no runtime'));
   }
-  const sent = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch });
-  if (sent && typeof sent.then === 'function') return sent;
   return new Promise((resolve, reject) => {
+    let responded = false;
     try {
-      api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+      const maybePromise = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+        responded = true;
         const err = api.runtime && api.runtime.lastError;
         if (err) reject(new Error(err.message || String(err)));
         else resolve(res);
       });
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(
+          res => { if (!responded) resolve(res); },
+          err => { if (!responded) reject(err); }
+        );
+      }
     } catch (error) {
       reject(error);
     }
@@ -136,16 +142,19 @@ async function render() {
     remove.className = 'remove-btn';
     remove.textContent = t('remove');
     remove.addEventListener('click', async () => {
+      if (remove.disabled) return;
+      remove.disabled = true;
       try {
-        try {
-          await globalThis.HamsooFontDB.remove(font.id);
-        } catch (_) { /* metadata cleanup below still applies */ }
         const res = await sendSettingsPatch({ removeFont: font.id });
         if (!res || res.ok === false) throw new Error((res && res.error) || 'save failed');
+        try {
+          await globalThis.HamsooFontDB.remove(font.id);
+        } catch (_) { /* metadata cleanup already succeeded */ }
         applyRemoteSettings(res.settings);
         await render();
         setStatus(t('removedFont', font.name));
       } catch (_) {
+        remove.disabled = false;
         setStatus(t('saveSettingsError'));
       }
     });
@@ -170,6 +179,7 @@ async function addFiles(files) {
       setStatus(t('tooBig', file.name));
       continue;
     }
+    const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     try {
       const bytes = await file.arrayBuffer();
       const sniffed = globalThis.HamsooUtil && typeof globalThis.HamsooUtil.sniffFontFormat === 'function'
@@ -186,14 +196,19 @@ async function addFiles(files) {
         setStatus(t('unsupported', file.name));
         continue;
       }
-      const id = 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
       const name = file.name.replace(/\.[^.]+$/, '').slice(0, 120) || t('defaultFontName');
       await globalThis.HamsooFontDB.put({ id, name, format: sniffed, bytes, size: file.size, added: Date.now() });
       const res = await sendSettingsPatch({ addFont: { id, name, format: sniffed, size: file.size } });
       if (!res || res.ok === false) throw new Error((res && res.error) || 'save failed');
+      const addedToSettings = res.settings && Array.isArray(res.settings.customFonts) &&
+        res.settings.customFonts.some(f => f && f.id === id);
+      if (!addedToSettings) {
+        throw new Error('font capacity exceeded');
+      }
       applyRemoteSettings(res.settings);
       setStatus(t('addedFont', name));
     } catch (_) {
+      try { await globalThis.HamsooFontDB.remove(id); } catch (_) {}
       setStatus(t('addFailed', file.name));
     }
   }

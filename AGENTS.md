@@ -63,7 +63,7 @@ pre-1.3.0 narrative, or anything under `docs/archive/`, as the open-bug list.
     ├── CHANGELOG.md
     ├── LICENSE               Copied into dist/ by build.js (AGPL requirement).
     ├── src/                  The extension itself.
-    ├── test/                 PUBLISHED test suite. Count lives in `test/run.js` (323 passing after H11 delimiter planner; git publishability skipped without `.git`).
+    ├── test/                 PUBLISHED test suite. Count lives in `test/run.js` (341 passing outside git; 345 in git).
     ├── scripts/              check, build helpers, zip, preview, bump-version,
     │                         version-sites (the version registry), release-notes
     └── website/              Project website, deployed to GitHub Pages.
@@ -110,7 +110,7 @@ cd hamsoo-addon && node scripts/bump-version.js <major.minor.patch>
 ```
 
 `npm run verify` must print `check OK`, `build OK` (twice — once per target), and
-`327 passed, 0 failed` (or `323 passed, 0 failed` outside git). Treat anything else as a failure, including a zero exit code with
+`345 passed, 0 failed` (or `341 passed, 0 failed` outside git). Treat anything else as a failure, including a zero exit code with
 unexpected output.
 
 That count is a live number, not decoration: it is the figure the READMEs quote. If you add or
@@ -119,7 +119,7 @@ commit, or the three drift apart the way the version numbers once did (§6).
 
 Four of those are the `publishable` group, which asks `git check-ignore` what a fresh clone
 would actually contain. Outside a git repository (a tarball, a vendored copy) they skip with a
-printed note and the run reports 323. That is expected; CI always has git.
+printed note and the run reports 341. That is expected; CI always has git.
 
 ---
 

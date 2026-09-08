@@ -406,8 +406,11 @@
     try { return JSON.stringify(a) === JSON.stringify(b); } catch (_) { return false; }
   }
 
+  var MAP_SETTINGS = { sites: true, siteOverrides: true, customSelectors: true };
+
   // Compare the UI's in-memory object to the last acknowledged storage copy
-  // and return only the keys the UI actually changed.
+  // and return only the keys the UI actually changed. For nested maps, only
+  // return the changed leaf keys so concurrent edits to different keys survive.
   function diffSettingsFields(acked, local) {
     var fields = {};
     if (!local || typeof local !== 'object') return fields;
@@ -416,13 +419,37 @@
     for (key in local) {
       if (!Object.prototype.hasOwnProperty.call(local, key)) continue;
       if (key === 'syncVersion') continue;
-      if (!sameJson(local[key], acked[key])) fields[key] = cloneJson(local[key]);
+      if (MAP_SETTINGS[key]) {
+        var localSub = local[key] && typeof local[key] === 'object' ? local[key] : {};
+        var ackedSub = acked[key] && typeof acked[key] === 'object' ? acked[key] : {};
+        var subDiff = {};
+        var subChanged = false;
+        var skey;
+        for (skey in localSub) {
+          if (!Object.prototype.hasOwnProperty.call(localSub, skey)) continue;
+          if (!sameJson(localSub[skey], ackedSub[skey])) {
+            subDiff[skey] = cloneJson(localSub[skey]);
+            subChanged = true;
+          }
+        }
+        for (skey in ackedSub) {
+          if (!Object.prototype.hasOwnProperty.call(ackedSub, skey)) continue;
+          if (!Object.prototype.hasOwnProperty.call(localSub, skey)) {
+            subDiff[skey] = null;
+            subChanged = true;
+          }
+        }
+        if (subChanged) fields[key] = subDiff;
+      } else {
+        if (!sameJson(local[key], acked[key])) fields[key] = cloneJson(local[key]);
+      }
     }
     return fields;
   }
 
   // Keep unacked local edits when storage changes under the UI (popup debounce
   // vs a background write). Incoming wins for every field the UI has not edited.
+  // For nested maps, merge at the leaf level so incoming sibling edits are kept.
   function rebasePendingSettings(acked, local, incoming) {
     var result = {};
     var src = incoming && typeof incoming === 'object' ? incoming : {};
@@ -437,7 +464,28 @@
     for (key in local) {
       if (!Object.prototype.hasOwnProperty.call(local, key)) continue;
       if (key === 'syncVersion') continue;
-      if (!sameJson(local[key], acked[key])) result[key] = cloneJson(local[key]);
+      if (MAP_SETTINGS[key]) {
+        var localMap = local[key] && typeof local[key] === 'object' ? local[key] : {};
+        var ackedMap = acked[key] && typeof acked[key] === 'object' ? acked[key] : {};
+        var incMap = result[key] && typeof result[key] === 'object' ? result[key] : {};
+        var mergedMap = cloneJson(incMap);
+        var mkey;
+        for (mkey in localMap) {
+          if (!Object.prototype.hasOwnProperty.call(localMap, mkey)) continue;
+          if (!sameJson(localMap[mkey], ackedMap[mkey])) {
+            mergedMap[mkey] = cloneJson(localMap[mkey]);
+          }
+        }
+        for (mkey in ackedMap) {
+          if (!Object.prototype.hasOwnProperty.call(ackedMap, mkey)) continue;
+          if (!Object.prototype.hasOwnProperty.call(localMap, mkey)) {
+            delete mergedMap[mkey];
+          }
+        }
+        result[key] = mergedMap;
+      } else {
+        if (!sameJson(local[key], acked[key])) result[key] = cloneJson(local[key]);
+      }
     }
     return result;
   }
@@ -466,7 +514,41 @@
       for (key in patch.fields) {
         if (!Object.prototype.hasOwnProperty.call(patch.fields, key)) continue;
         if (key === 'syncVersion') continue;
-        settings[key] = patch.fields[key];
+        if (MAP_SETTINGS[key] && patch.fields[key] && typeof patch.fields[key] === 'object') {
+          if (!settings[key] || typeof settings[key] !== 'object') settings[key] = {};
+          for (var sk in patch.fields[key]) {
+            if (!Object.prototype.hasOwnProperty.call(patch.fields[key], sk)) continue;
+            if (patch.fields[key][sk] === null) {
+              delete settings[key][sk];
+            } else {
+              settings[key][sk] = patch.fields[key][sk];
+            }
+          }
+        } else {
+          settings[key] = patch.fields[key];
+        }
+      }
+    }
+    if (typeof patch.removeCustomSite === 'string' && patch.removeCustomSite) {
+      var rSite = patch.removeCustomSite;
+      if (Array.isArray(settings.customSites)) {
+        settings.customSites = settings.customSites.filter(function (p) {
+          return p !== rSite;
+        });
+      }
+    }
+    if (patch.removeCustomSelector && typeof patch.removeCustomSelector === 'object') {
+      var rHost = patch.removeCustomSelector.host;
+      var rSel = patch.removeCustomSelector.selector;
+      if (rHost && rSel && settings.customSelectors && typeof settings.customSelectors === 'object') {
+        if (Array.isArray(settings.customSelectors[rHost])) {
+          settings.customSelectors[rHost] = settings.customSelectors[rHost].filter(function (s) {
+            return s !== rSel;
+          });
+          if (settings.customSelectors[rHost].length === 0) {
+            delete settings.customSelectors[rHost];
+          }
+        }
       }
     }
     if (patch.addFont && typeof patch.addFont === 'object') {
@@ -767,7 +849,11 @@
   // enforce different caps.
   var MAX_CUSTOM_FONTS = 12;
   var MAX_FONT_BYTES = 4 * 1024 * 1024;
-  var MAX_IMPORT_BYTES = MAX_CUSTOM_FONTS * MAX_FONT_BYTES + 1024 * 1024;
+  // Base64 expands binary data by ~4/3 (ceil(bytes / 3) * 4). Budget for 12 maximum
+  // fonts in base64 plus JSON envelope and metadata overhead so the largest supported
+  // export can round-trip through import.
+  var MAX_BASE64_FONT_BYTES = Math.ceil(MAX_FONT_BYTES / 3) * 4;
+  var MAX_IMPORT_BYTES = (MAX_CUSTOM_FONTS * MAX_BASE64_FONT_BYTES) + (4 * 1024 * 1024);
 
   // Extension-only checks accept a renamed .txt. Sniff the sfnt/WOFF magic
   // so an undecodable file cannot be installed.

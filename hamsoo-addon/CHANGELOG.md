@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.4.1] - 2026-09-08
+
+Hotfix release addressing an issue introduced in version 1.4.0 with delimiter and parenthesis handling in mixed-language lists.
+
+### Highlights
+
+- Parentheses and punctuation around Latin words in RTL text now stay in their correct visual positions.
+- Section separators and colons next to bracketed vocabulary terms remain outside the Latin isolate.
+- Dynamic page text updates are preserved cleanly without overwriting host content during digit restoration.
+- Settings removals update targeted site records without overwriting concurrent edits.
+- Font operations and imports use safe rollback to prevent custom font data loss on write failure.
+
+### Fixed
+
+- **Bidirectional delimiter and parenthesis isolation**: In version 1.4.0, Latin run wrapping in right-to-left blocks inadvertently swallowed outer parentheses, section separators (such as em-dashes), and trailing colons into LTR spans when terms were wrapped in brackets (for example, vocabulary definitions like "مذکر (der):", "(Experten, pl.) — کارشناس", and "(Jungen, pl. — اسم با پایان ضعیف/n-Deklination)"). This caused closing brackets and punctuation to jump to the wrong side of the line. Version 1.4.1 resolves this with a delimiter-aware boundary planner that balances bracket pairs with a stack over the original text, keeps outer parentheses and boundary separators in the surrounding context, and ensures punctuation stays glued to the intended phrase.
+- **Dynamic host text updates and digit restoration**: Fixed text restoration so digit localization respects node ownership and does not overwrite newer text updated dynamically by host pages, and ensures mixed paragraphs cleanly restore original digits when Hamsoo is disabled.
+- **Settings persistence concurrency**: Narrowed site and selector removals to update only targeted items without clobbering concurrent background or popup changes.
+- **Transactional font operations**: Font additions, removals, and backup imports now feature transactional rollback to preserve existing custom fonts if persistence fails.
+- **Writing field direction restoration**: Turning off input direction assistance cleanly restores the author's original direction on chat textareas and inputs without computed right-to-left overrides.
+
+### Changed
+
+- **Input writing direction assistance toggle**: The input direction assistance control has been relocated from the main screen into Advanced Settings under "Adjust writing direction".
+- **Preserved clipboard contents**: Removed silent clipboard paste interception, ensuring text pasted into chat fields remains untouched.
+
 ## [1.4.0] - 2026-09-07
 
 Serialized settings writes, strict backup validation, improved teardown, and punctuation alignment for mixed-language text.

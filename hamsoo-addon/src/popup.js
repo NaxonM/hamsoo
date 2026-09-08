@@ -237,15 +237,21 @@ function sendSettingsPatch(patch) {
   if (!hasAPI || !api.runtime || typeof api.runtime.sendMessage !== 'function') {
     return Promise.reject(new Error('no runtime'));
   }
-  const sent = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch });
-  if (sent && typeof sent.then === 'function') return sent;
   return new Promise((resolve, reject) => {
+    let responded = false;
     try {
-      api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+      const maybePromise = api.runtime.sendMessage({ type: 'HAMSOO_PATCH_SETTINGS', patch }, (res) => {
+        responded = true;
         const err = api.runtime && api.runtime.lastError;
         if (err) reject(new Error(err.message || String(err)));
         else resolve(res);
       });
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(
+          res => { if (!responded) resolve(res); },
+          err => { if (!responded) reject(err); }
+        );
+      }
     } catch (error) {
       reject(error);
     }
@@ -272,8 +278,24 @@ async function writeSettings() {
 }
 
 async function persistNow() {
+  const util = globalThis.HamsooUtil;
   if (!hasAPI) return false;
   try {
+    if (util && typeof util.diffSettingsFields === 'function') {
+      const fields = util.diffSettingsFields(lastAcked, settings);
+      if (Object.keys(fields).length) {
+        const ackedAtSend = lastAcked;
+        const res = await sendSettingsPatch({ fields });
+        if (!res || res.ok === false) throw new Error((res && res.error) || 'patch failed');
+        if (res.settings && typeof res.settings === 'object') {
+          const committed = normalize(res.settings);
+          settings = util.rebasePendingSettings(ackedAtSend, settings, committed);
+          lastAcked = cloneSettings(committed);
+        }
+        return true;
+      }
+      return true;
+    }
     const res = await sendSettingsPatch({ replace: settings });
     if (!res || res.ok === false) throw new Error((res && res.error) || 'replace failed');
     if (res.settings && typeof res.settings === 'object') {
@@ -344,7 +366,7 @@ async function requestImportedSitePermissions() {
 }
 
 async function importSettings(file) {
-  const maxImport = HamsooUtil.MAX_IMPORT_BYTES || (12 * 4 * 1024 * 1024);
+  const maxImport = HamsooUtil.MAX_IMPORT_BYTES || (72 * 1024 * 1024);
   if (file && typeof file.size === 'number' && file.size > maxImport) {
     setStatus(t('invalidFile'));
     return;
@@ -368,13 +390,27 @@ async function importSettings(file) {
   const maxFonts = HamsooUtil.MAX_CUSTOM_FONTS;
   const maxBytes = HamsooUtil.MAX_FONT_BYTES;
   const acceptedFontIds = new Set();
-  const stagedFontIds = [];
+  const newlyAddedFontIds = [];
+  const overwrittenFonts = new Map();
   let skippedFonts = 0;
   const incomingFonts = Array.isArray(parsed.fonts) ? parsed.fonts : [];
   const hadFontPayload = incomingFonts.length > 0 && Boolean(globalThis.HamsooFontDB);
   if (hadFontPayload) {
+    let existingMap = new Map();
+    try {
+      const list = await globalThis.HamsooFontDB.list();
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          if (item && item.id) existingMap.set(item.id, item);
+        }
+      }
+    } catch (_) {}
+
+    const seenImportIds = new Set();
     for (const font of incomingFonts) {
       if (!font || typeof font.id !== 'string' || typeof font.bytes !== 'string') continue;
+      if (seenImportIds.has(font.id)) { skippedFonts += 1; continue; }
+      seenImportIds.add(font.id);
       if (acceptedFontIds.size >= maxFonts) { skippedFonts += 1; continue; }
       let bytes;
       try { bytes = base64ToBuffer(font.bytes); } catch (_) { skippedFonts += 1; continue; }
@@ -382,7 +418,23 @@ async function importSettings(file) {
       if (size > maxBytes) { skippedFonts += 1; continue; }
       const sniffed = HamsooUtil.sniffFontFormat ? HamsooUtil.sniffFontFormat(bytes) : '';
       if (!sniffed) { skippedFonts += 1; continue; }
+
+      if (typeof FontFace === 'function') {
+        try {
+          const probe = new FontFace('HamsooProbe_' + Date.now().toString(36), bytes);
+          await probe.load();
+        } catch (_) {
+          skippedFonts += 1;
+          continue;
+        }
+      }
+
       try {
+        if (existingMap.has(font.id)) {
+          overwrittenFonts.set(font.id, existingMap.get(font.id));
+        } else {
+          newlyAddedFontIds.push(font.id);
+        }
         await globalThis.HamsooFontDB.put({
           id: font.id,
           name: typeof font.name === 'string' ? font.name : 'فونت شخصی',
@@ -392,7 +444,6 @@ async function importSettings(file) {
           added: Number(font.added) || Date.now()
         });
         acceptedFontIds.add(font.id);
-        stagedFontIds.push(font.id);
       } catch (_) { skippedFonts += 1; }
     }
   }
@@ -401,12 +452,26 @@ async function importSettings(file) {
     settings.customFonts = settings.customFonts.filter(f => acceptedFontIds.has(f.id));
   }
   settings.customFonts = settings.customFonts.slice(0, maxFonts);
+  if (settings.font && settings.font.startsWith('custom:') && !settings.customFonts.some(f => ('custom:' + f.id) === settings.font)) {
+    settings.font = 'Vazirmatn';
+  }
+  if (settings.siteOverrides && typeof settings.siteOverrides === 'object') {
+    for (const host of Object.keys(settings.siteOverrides)) {
+      const ov = settings.siteOverrides[host];
+      if (ov && ov.font && ov.font.startsWith('custom:') && !settings.customFonts.some(f => ('custom:' + f.id) === ov.font)) {
+        delete ov.font;
+      }
+    }
+  }
   delete settings.syncVersion;
   const deniedSites = await requestImportedSitePermissions();
   const saved = await persistNow();
   if (!saved) {
-    for (const id of stagedFontIds) {
+    for (const id of newlyAddedFontIds) {
       try { await globalThis.HamsooFontDB.remove(id); } catch (_) {}
+    }
+    for (const [id, prevRecord] of overwrittenFonts) {
+      try { await globalThis.HamsooFontDB.put(prevRecord); } catch (_) {}
     }
     settings = previous;
     lastAcked = previousAcked;
@@ -706,15 +771,16 @@ async function pushCustomSites() {
 }
 
 async function removeCustomSite(pattern) {
-  settings.customSites = settings.customSites.filter(p => p !== pattern);
-  // Persist immediately so the open tab hears storage.onChanged and tears down.
-  // A debounced save would leave Hamsoo running until the timer fired.
-  await persistNow();
+  settings.customSites = (settings.customSites || []).filter(p => p !== pattern);
+  const saved = await persistNow();
+  if (!saved) {
+    renderCustomSites();
+    renderCurrentSite();
+    return;
+  }
   if (hasAPI && api.runtime) {
     await pushCustomSites();
   }
-  // Revoke the origin permission too, so removed sites don't leave a
-  // lingering host grant behind.
   if (hasAPI && api.permissions && typeof api.permissions.remove === 'function') {
     try { await api.permissions.remove({ origins: [pattern] }); } catch (_) { /* already gone */ }
   }
@@ -757,8 +823,6 @@ async function removeCustomSelector(hostKey, selector) {
   if (list.length) map[hostKey] = list;
   else delete map[hostKey];
   settings.customSelectors = map;
-  // Persist immediately so the open tab hears storage.onChanged and unstyles
-  // the picked element. A debounced save would leave it marked.
   await persistNow();
   renderPickedElements();
 }
@@ -1108,19 +1172,32 @@ function renderCurrentSite() {
   action.className = 'btn';
 
   if (currentTab.siteKey) {
-    const on = settings.enabled && settings.sites[currentTab.siteKey];
-    dot.classList.toggle('off', !on);
-    state.textContent = on ? t('activeHere') : t('inactiveHere');
-    action.textContent = on ? t('disable') : t('enable');
-    action.onclick = () => {
-      settings.sites[currentTab.siteKey] = !settings.sites[currentTab.siteKey];
-      renderSites();
-      renderCurrentSite();
-      save();
-    };
+    const siteFlag = Boolean(settings.sites[currentTab.siteKey]);
+    const effectivelyActive = settings.enabled && siteFlag;
+    dot.classList.toggle('off', !effectivelyActive);
+    if (!settings.enabled) {
+      state.textContent = t('inactiveHere');
+      action.textContent = t('enable');
+      action.onclick = () => {
+        settings.enabled = true;
+        settings.sites[currentTab.siteKey] = true;
+        renderAll();
+        save(true);
+      };
+    } else {
+      state.textContent = siteFlag ? t('activeHere') : t('inactiveHere');
+      action.textContent = siteFlag ? t('disable') : t('enable');
+      action.onclick = () => {
+        settings.sites[currentTab.siteKey] = !siteFlag;
+        renderSites();
+        renderCurrentSite();
+        save();
+      };
+    }
   } else if (currentTab.isCustom) {
-    dot.classList.remove('off');
-    state.textContent = t('customActive');
+    const effectivelyActive = Boolean(settings.enabled);
+    dot.classList.toggle('off', !effectivelyActive);
+    state.textContent = effectivelyActive ? t('customActive') : t('inactiveHere');
     action.textContent = t('removeSite');
     action.onclick = () => { void removeCustomSite(currentTab.pattern); };
   } else {

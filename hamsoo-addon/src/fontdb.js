@@ -25,6 +25,31 @@
     });
   }
 
+  function promisifyTx(tx, req) {
+    return new Promise((resolve, reject) => {
+      let result;
+      let settled = false;
+      function fail(err) {
+        if (!settled) {
+          settled = true;
+          reject(err || new Error('transaction failed'));
+        }
+      }
+      if (req) {
+        req.onsuccess = () => { result = req.result; };
+        req.onerror = () => fail(req.error);
+      }
+      tx.oncomplete = () => {
+        if (!settled) {
+          settled = true;
+          resolve(result);
+        }
+      };
+      tx.onerror = () => fail(tx.error);
+      tx.onabort = () => fail(tx.error || new Error('transaction aborted'));
+    });
+  }
+
   // Every call opened a fresh connection and never closed it. In the popup and
   // options page that is a slow leak; in the background worker it is worse,
   // because a still-open connection blocks any future `onupgradeneeded`, so a
@@ -41,13 +66,21 @@
   globalThis.HamsooFontDB = {
     // font: { id, name, format, bytes: ArrayBuffer, size, added }
     put(font) {
-      return withDb(db => promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).put(font)));
+      return withDb(db => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).put(font);
+        return promisifyTx(tx, req);
+      });
     },
     get(id) {
       return withDb(db => promisify(db.transaction(STORE).objectStore(STORE).get(id)));
     },
     remove(id) {
-      return withDb(db => promisify(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(id)));
+      return withDb(db => {
+        const tx = db.transaction(STORE, 'readwrite');
+        const req = tx.objectStore(STORE).delete(id);
+        return promisifyTx(tx, req);
+      });
     },
     list() {
       return withDb(db => promisify(db.transaction(STORE).objectStore(STORE).getAll()));
