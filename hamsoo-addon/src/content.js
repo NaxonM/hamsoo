@@ -648,16 +648,151 @@
     if (!el.matches(EDITABLE_SELECTOR)) restoreDigits(el);
   }
 
-  // Wraps bare Latin text nodes in <span data-hamsoo-run="ltr"> inside RTL
-  // blocks. Element-level classification cannot reach bare text nodes,
-  // and without an explicit isolate span, neutral punctuation at the English
-  // boundary inherits the container's RTL direction and flips margins.
+  // Wraps Latin runs in <span data-hamsoo-run="ltr"> inside RTL blocks.
+  // Element-level classification cannot reach bare text nodes, and without
+  // an explicit isolate span, neutral punctuation at the English boundary
+  // inherits the container's RTL direction and flips margins.
+  //
+  // Planning is done on concatenated inline text, not per text node. A German
+  // phrase split by author <b>/<i> ("Ich suche <b>den richtig-en</b> Mann.")
+  // is one logical LTR run; wrapping each text node separately creates
+  // adjacent isolates that the RTL parent then lays out in reverse.
+  // The wrapper may span phrasing markup. Author elements are not flattened:
+  // fully covered ancestors are lifted so <b> stays intact inside the span.
+  const LTR_SKIP_CLOSEST = 'pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [data-hamsoo-run]';
+
+  function nextInTree(node, root) {
+    if (node.firstChild) return node.firstChild;
+    while (node && node !== root) {
+      if (node.nextSibling) return node.nextSibling;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function hasSkippedBetween(a, b, root) {
+    let n = a;
+    while (n && n !== b) {
+      n = nextInTree(n, root);
+      if (!n || n === b) break;
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        if (n.matches(LTR_SKIP_CLOSEST)) return true;
+        if (n !== root && n.matches(SELECTOR)) return true;
+      }
+    }
+    return false;
+  }
+
+  function isTextInsideInterval(textNode, startNode, endNode) {
+    if (textNode === startNode || textNode === endNode) return true;
+    const afterStart = (startNode.compareDocumentPosition(textNode) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    const beforeEnd = (endNode.compareDocumentPosition(textNode) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+    return afterStart && beforeEnd;
+  }
+
+  function parentFullyCovered(parent, startNode, endNode) {
+    const w = document.createTreeWalker(parent, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      if (!isTextInsideInterval(n, startNode, endNode)) return false;
+    }
+    return true;
+  }
+
+  function liftStart(startNode, endNode, root) {
+    let start = startNode;
+    while (start.parentNode && start.parentNode !== root) {
+      const parent = start.parentNode;
+      if (parent.nodeType !== Node.ELEMENT_NODE) break;
+      if (start.previousSibling) break;
+      if (!parentFullyCovered(parent, startNode, endNode)) break;
+      if (parent.matches(LTR_SKIP_CLOSEST)) break;
+      start = parent;
+    }
+    return start;
+  }
+
+  function liftEnd(startNode, endNode, root) {
+    let end = endNode;
+    while (end.parentNode && end.parentNode !== root) {
+      const parent = end.parentNode;
+      if (parent.nodeType !== Node.ELEMENT_NODE) break;
+      if (end.nextSibling) break;
+      if (!parentFullyCovered(parent, startNode, endNode)) break;
+      if (parent.matches(LTR_SKIP_CLOSEST)) break;
+      end = parent;
+    }
+    return end;
+  }
+
+  function findMappedStart(map, offset) {
+    for (const m of map) {
+      if (offset >= m.start && offset < m.end) {
+        return { node: m.node, local: offset - m.start };
+      }
+    }
+    return null;
+  }
+
+  function findMappedEnd(map, offset) {
+    if (offset <= 0) return null;
+    for (const m of map) {
+      if (offset > m.start && offset <= m.end) {
+        return { node: m.node, local: offset - m.start };
+      }
+    }
+    return null;
+  }
+
+  function wrapMappedRange(map, start, end, root) {
+    const s = findMappedStart(map, start);
+    const e = findMappedEnd(map, end);
+    if (!s || !e) return;
+    if (s.node === e.node && s.local >= e.local) return;
+    if (!s.node.parentNode || !e.node.parentNode) return;
+
+    let startNode = s.node;
+    let endNode = e.node;
+    let endLocal = e.local;
+
+    if (startNode === endNode) {
+      if (endLocal < startNode.nodeValue.length) startNode.splitText(endLocal);
+      if (s.local > 0) startNode = startNode.splitText(s.local);
+      endNode = startNode;
+    } else {
+      if (s.local > 0) startNode = startNode.splitText(s.local);
+      if (endLocal < endNode.nodeValue.length) endNode.splitText(endLocal);
+    }
+    if (!startNode || !endNode) return;
+
+    const origStart = startNode;
+    const origEnd = endNode;
+    startNode = liftStart(origStart, origEnd, root);
+    endNode = liftEnd(origStart, origEnd, root);
+
+    const range = document.createRange();
+    if (startNode.nodeType === Node.TEXT_NODE) range.setStart(startNode, 0);
+    else range.setStartBefore(startNode);
+    if (endNode.nodeType === Node.TEXT_NODE) range.setEnd(endNode, endNode.nodeValue.length);
+    else range.setEndAfter(endNode);
+
+    const span = document.createElement('span');
+    span.setAttribute('dir', 'ltr');
+    span.setAttribute('data-hamsoo-run', 'ltr');
+    try {
+      range.surroundContents(span);
+    } catch (_) {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    }
+  }
+
   function isolateBareLTRRuns(el) {
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
-        if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+        if (!node.nodeValue) return NodeFilter.FILTER_REJECT;
         const parent = node.parentElement;
-        if (!parent || parent.closest('pre, code, textarea, input, [contenteditable]:not([contenteditable="false"]), [data-hamsoo-run]')) {
+        if (!parent || parent.closest(LTR_SKIP_CLOSEST)) {
           return NodeFilter.FILTER_REJECT;
         }
         if (inNestedBlock(node, el)) return NodeFilter.FILTER_REJECT;
@@ -666,31 +801,34 @@
     });
     const nodes = [];
     for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+    if (!nodes.length) return;
 
-    for (const node of nodes) {
-      const text = node.nodeValue;
+    const groups = [];
+    let group = [nodes[0]];
+    for (let i = 1; i < nodes.length; i++) {
+      if (hasSkippedBetween(nodes[i - 1], nodes[i], el)) {
+        groups.push(group);
+        group = [nodes[i]];
+      } else {
+        group.push(nodes[i]);
+      }
+    }
+    groups.push(group);
+
+    for (const nodesInGroup of groups) {
+      let text = '';
+      const map = [];
+      for (const node of nodesInGroup) {
+        const v = node.nodeValue;
+        map.push({ node, start: text.length, end: text.length + v.length });
+        text += v;
+      }
       if (!LATIN_LETTER_RE.test(text)) continue;
-
       const pieces = planLTRIsolates(text);
       if (!pieces.length) continue;
-
-      const frag = document.createDocumentFragment();
-      let cursor = 0;
-      for (const piece of pieces) {
-        if (piece.start > cursor) {
-          frag.appendChild(document.createTextNode(text.slice(cursor, piece.start)));
-        }
-        const span = document.createElement('span');
-        span.setAttribute('dir', 'ltr');
-        span.setAttribute('data-hamsoo-run', 'ltr');
-        span.textContent = piece.text;
-        frag.appendChild(span);
-        cursor = piece.end;
+      for (let i = pieces.length - 1; i >= 0; i--) {
+        wrapMappedRange(map, pieces[i].start, pieces[i].end, el);
       }
-      if (cursor < text.length) {
-        frag.appendChild(document.createTextNode(text.slice(cursor)));
-      }
-      node.parentNode.replaceChild(frag, node);
     }
   }
 

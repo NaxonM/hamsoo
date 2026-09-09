@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.4.2] - 2026-09-09
+
+Improved phrase isolation for Latin text containing inline styles inside right-to-left paragraphs.
+
+### Highlights
+
+- Embedded phrases with inline formatting now stay in proper left-to-right order inside RTL paragraphs.
+- Sentences containing bold or italic words are isolated as continuous phrases rather than fragmented words.
+- Original author formatting and element attributes are preserved without layout disruption.
+
+### Fixed
+
+- **Word order in formatted phrases**: Fixed an issue where Latin phrases with styled or bold words were broken into separate segments, causing words to display in reverse sequence inside right-to-left paragraphs. Entire phrases are now grouped together so words read in their natural sequence.
+
 ## [1.4.1] - 2026-09-08
 
 Hotfix release addressing delimiter and parenthesis alignment in mixed-language text.

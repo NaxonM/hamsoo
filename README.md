@@ -164,7 +164,7 @@ cd hamsoo-addon
 
 npm run check         # Syntax, manifest validation, and i18n checks
 npm run build         # Build Chromium and Firefox targets
-npm test              # Run 345 automated headless tests
+npm test              # Run 351 automated headless tests
 npm run verify        # Check + build + test gate
 npm run zip           # Package release archives
 npm run preview       # Generate UI screenshots

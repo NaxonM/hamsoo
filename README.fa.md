@@ -165,7 +165,7 @@ cd hamsoo-addon
 
 npm run check         # اعتبارسنجی نحو، مانیفست و ترجمه‌ها
 npm run build         # ساخت نسخهٔ کرومیوم و فایرفاکس
-npm test              # اجرای ۳۴۵ آزمون خودکار
+npm test              # اجرای ۳۵۱ آزمون خودکار
 npm run verify        # بررسی کامل (check + build + test)
 npm run zip           # بسته‌بندی فایل‌های انتشار
 npm run preview       # تولید تصویرهای پیش‌نمایش

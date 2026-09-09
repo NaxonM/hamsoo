@@ -1,6 +1,6 @@
-# Ground truth — status as of 8 Sep 2026
+# Ground truth — status as of 9 Sep 2026
 
-**Product:** Hamsoo 1.4.0.
+**Product:** Hamsoo 1.4.2.
 **Archive SHA-256:** `a2380c5534303e9ba689cc1d0c17ba48f54930975390645ff8cc56bfe8d1052b`
 **Baseline (unpatched 1.4.0):** `npm run check` OK; `npm test` **323 passed, 0 failed** (git publishability skipped without `.git`).
 
@@ -11,7 +11,9 @@
   - Granular Settings & Host Permissions (A04, A05, A11, A14): leaf-level map diffing/merging for `sites`, `siteOverrides`, and `customSelectors`, side effects strictly gated on committed persistence, and single-dispatch messaging.
   - Content Script Ownership & Undo (A06, A07, A08, A16): node ownership with `lastWritten` check protecting host page updates, digit restoration preserved across LTR isolates on teardown, full cleanup of dropped extra selectors, and editable direction opt-out preventing computed RTL overrides.
   - UI Accuracy & Selection Context (A12, A13, Part 2): effective site status aligned with master switch, selection container coverage checking text node siblings, and punctuation control relocated to Advanced Settings without silent paste bidi stripping.
-**Tests:** `npm run check` OK; `npm test` **345 passed, 0 failed** (341 outside git). i18n 175 keys.
+**Tests:** `npm run check` OK; `npm test` **351 passed, 0 failed** (347 outside git). i18n 175 keys.
+
+**H11 follow-up (9 Sep 2026):** Bare LTR isolation now plans on concatenated inline text so a German phrase split by author `<b>`/`<i>` (e.g. `Ich suche <b>den richtig-en</b> Mann.` or `sich interessieren (…) + für (Akkusativ)`) becomes **one** `data-hamsoo-run` isolate. Wrapping each text node separately created adjacent isolates that an RTL parent laid out in reverse. Author markup is preserved; disable still unwraps cleanly.
 
 This file is the **only** current open-issue list. Detailed reproduction, root cause, fix steps, and regression gates live in the Notion audit (see `HANDOVER.md`). Older B1–B44 / “Status: Open” text in `docs/archive/` is not current.
 

@@ -1,6 +1,6 @@
 {
   "name": "hamsoo",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "private": true,
   "description": "Hamsoo - RTL/Persian typography helper for AI chat sites. Single-source build for Chromium and Firefox.",
   "author": "NaxonM",
